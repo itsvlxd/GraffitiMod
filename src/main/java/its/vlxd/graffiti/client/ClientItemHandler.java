@@ -20,6 +20,8 @@ import java.util.Queue;
 import java.util.Random;
 
 public class ClientItemHandler {
+    private record PaintTarget(BlockPos pos, Direction side, int u, int v) {}
+
     public static void handleAttack(BlockHitResult hit) {
         var client = Minecraft.getInstance();
         if (client.player != null) {
@@ -76,8 +78,13 @@ public class ClientItemHandler {
         }
 
         if (newColor != 0) {
+            var client = Minecraft.getInstance();
+            if (client.player != null && !client.player.isCreative()) {
+                if (GraffitiItem.isColorLocked(stack)) return;
+                GraffitiItem.setColorLocked(stack, true);
+            }
             GraffitiItem.setColor(stack, newColor);
-            PacketDistributor.sendToServer(new ColorPayload(newColor));
+            PacketDistributor.sendToServer(new ColorPayload(newColor, GraffitiItem.getBrushSize(stack), GraffitiItem.getBrushShape(stack)));
         }
     }
 
@@ -93,10 +100,14 @@ public class ClientItemHandler {
         for (int x = -rad; x <= rad; x++) {
             for (int y = -rad; y <= rad + extraY; y++) {
                 int u = uC + x, v = vC + y;
-                if (u < 0 || u >= 16 || v < 0 || v >= 16) continue;
 
-                if (shouldPaint(x, y, rad, shape, rng)) {
-                    setPixel(pos, side, u, v, color);
+                if (u >= 0 && u < 16 && v >= 0 && v < 16) {
+                    if (shouldPaint(x, y, rad, shape, rng))
+                        setPixel(pos, side, u, v, color);
+                } else {
+                    PaintTarget t = resolveTarget(pos, side, u, v);
+                    if (t != null && shouldPaint(x, y, rad, shape, rng))
+                        setPixel(t.pos(), t.side(), t.u(), t.v(), color);
                 }
             }
         }
@@ -115,8 +126,8 @@ public class ClientItemHandler {
                 if (isRounded(x, y, rad)) yield true;
                 if (y > rad) {
                     Random dripRng = new Random(x * 31 + rad * 7);
-                    if (dripRng.nextFloat() < 0.3f && Math.abs(x) <= rad * 0.65f) {
-                        int dripLen = 1 + dripRng.nextInt(3);
+                        if (dripRng.nextFloat() < 0.15f && Math.abs(x) <= rad * 0.4f) {
+                        int dripLen = 1 + dripRng.nextInt(2);
                         yield y <= rad + dripLen;
                     }
                 }
@@ -124,6 +135,34 @@ public class ClientItemHandler {
             }
             default -> true;
         };
+    }
+
+    private static PaintTarget resolveTarget(BlockPos pos, Direction side, int u, int v) {
+        float fu = u / 16f, fv = v / 16f;
+        double wx, wy, wz;
+        switch (side) {
+            case NORTH -> { wx = pos.getX() + fu; wy = pos.getY() + fv; wz = pos.getZ(); }
+            case SOUTH -> { wx = pos.getX() + fu; wy = pos.getY() + fv; wz = pos.getZ() + 1; }
+            case WEST  -> { wx = pos.getX();      wy = pos.getY() + fv; wz = pos.getZ() + fu; }
+            case EAST  -> { wx = pos.getX() + 1;  wy = pos.getY() + fv; wz = pos.getZ() + fu; }
+            case UP    -> { wx = pos.getX() + fu; wy = pos.getY() + 1;  wz = pos.getZ() + fv; }
+            case DOWN  -> { wx = pos.getX() + fu; wy = pos.getY();      wz = pos.getZ() + fv; }
+            default -> { return null; }
+        }
+        BlockPos bp = BlockPos.containing(wx, wy, wz);
+        double lx = wx - bp.getX(), ly = wy - bp.getY(), lz = wz - bp.getZ();
+        double e = 0.001;
+        if (lz < e)     return new PaintTarget(bp, Direction.NORTH, clamp(lx * 16), clamp(ly * 16));
+        if (lz > 1 - e)  return new PaintTarget(bp, Direction.SOUTH, clamp(lx * 16), clamp(ly * 16));
+        if (lx < e)     return new PaintTarget(bp, Direction.WEST,  clamp(lz * 16), clamp(ly * 16));
+        if (lx > 1 - e)  return new PaintTarget(bp, Direction.EAST,  clamp(lz * 16), clamp(ly * 16));
+        if (ly < e)     return new PaintTarget(bp, Direction.DOWN,  clamp(lx * 16), clamp(lz * 16));
+        if (ly > 1 - e)  return new PaintTarget(bp, Direction.UP,    clamp(lx * 16), clamp(lz * 16));
+        return null;
+    }
+
+    private static int clamp(double v) {
+        return Math.max(0, Math.min(15, (int) Math.round(v)));
     }
 
     private static boolean isRounded(int x, int y, int rad) {

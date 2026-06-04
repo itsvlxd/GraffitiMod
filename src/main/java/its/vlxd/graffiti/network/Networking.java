@@ -57,9 +57,14 @@ public class Networking {
                         var player = context.player();
                         if (player == null) return;
                         ItemStack stack = player.getMainHandItem();
-                        if (stack.is(GraffitiMod.GRAFFITI_TOOL.get())) {
-                            GraffitiItem.setColor(stack, payload.color());
+                        if (!stack.is(GraffitiMod.GRAFFITI_TOOL.get())) return;
+                        if (!player.isCreative() && GraffitiItem.isColorLocked(stack)) {
+                            if (payload.color() != GraffitiItem.getColor(stack)) return;
                         }
+                        GraffitiItem.setColor(stack, payload.color());
+                        GraffitiItem.setBrushSize(stack, payload.brushSize());
+                        GraffitiItem.setBrushShape(stack, payload.brushShape());
+                        if (!player.isCreative()) GraffitiItem.setColorLocked(stack, true);
                     });
                 }
         );

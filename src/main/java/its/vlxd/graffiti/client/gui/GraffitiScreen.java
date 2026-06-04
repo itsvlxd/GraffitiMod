@@ -3,6 +3,7 @@ package its.vlxd.graffiti.client.gui;
 import its.vlxd.graffiti.item.GraffitiItem;
 import its.vlxd.graffiti.network.ColorPayload;
 import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Button;
@@ -27,6 +28,8 @@ public class GraffitiScreen extends Screen {
     private EditBox hexField;
     private Button sizeDown, sizeUp, shapeBtn;
     private boolean hasPendingColorPacket = false;
+    private boolean colorWasChanged = false;
+    private boolean isLocked;
 
     private DynamicTexture paletteTexture;
     private ResourceLocation textureId;
@@ -52,6 +55,9 @@ public class GraffitiScreen extends Screen {
         px = (width - W) / 2; 
         py = (height - H) / 2;
 
+        var player = Minecraft.getInstance().player;
+        isLocked = player != null && !player.isCreative() && GraffitiItem.isColorLocked(stack);
+
         int ic = GraffitiItem.getColor(stack);
         float[] hsb = Color.RGBtoHSB((ic >> 16) & 0xFF, (ic >> 8) & 0xFF, ic & 0xFF, null);
         hue = hsb[0]; 
@@ -63,6 +69,7 @@ public class GraffitiScreen extends Screen {
 
         hexField = new EditBox(font, px + 172, py + 77, 65, 16, Component.literal("Hex"));
         hexField.setValue(String.format("#%08X", ic));
+        hexField.setEditable(!isLocked);
         addRenderableWidget(hexField);
 
         sizeDown = Button.builder(Component.literal("-"), b -> { 
@@ -120,9 +127,14 @@ public class GraffitiScreen extends Screen {
         ctx.drawString(font, title, px + (W - font.width(title)) / 2, py + 6, 0xCCCCCC);
         ctx.fill(px + 4, py + 18, px + W - 4, py + 19, 0xFF444444);
 
+        if (isLocked) {
+            ctx.drawString(font, Component.literal("Color Locked"), px + 117 + 4, py + 26 + 12, 0xFF5555);
+        }
+
         int ppX = px + 10, ppY = py + 26;
         ctx.fill(ppX - 1, ppY - 1, ppX + PS + 1, ppY + PS + 1, 0xFF444444);
         if (textureId != null) ctx.blit(textureId, ppX, ppY, 0, 0, PS, PS, PS, PS);
+        if (isLocked) ctx.fill(ppX, ppY, ppX + PS, ppY + PS, 0x55000000);
 
         int sx = ppX + (int)(saturation * PS), sy = ppY + (int)((1f - brightness) * PS);
         ctx.fill(sx - 2, sy - 2, sx + 3, sy + 3, 0xFFFFFFFF);
@@ -152,6 +164,7 @@ public class GraffitiScreen extends Screen {
             ctx.fill(ppX + i, hY, ppX + i + 1, hY + 10, 0xFF000000 | Color.HSBtoRGB(i / 100f, 1f, 1f));
         }
         ctx.fill(ppX + (int)(hue * PS) - 1, hY - 1, ppX + (int)(hue * PS) + 2, hY + 11, 0xFFFFFFFF);
+        if (isLocked) ctx.fill(ppX, hY, ppX + PS, hY + 10, 0x55000000);
 
         int aY = hY + 25;
         ctx.fill(ppX - 1, aY - 1, ppX + PS + 1, aY + 11, 0xFF555555);
@@ -161,11 +174,14 @@ public class GraffitiScreen extends Screen {
             ctx.fill(ppX + i, aY, ppX + i + 1, aY + 10, 0xFF000000 | (g << 16 | g << 8 | g));
         }
         ctx.fill(ppX + (int)(alpha * PS) - 1, aY - 1, ppX + (int)(alpha * PS) + 2, aY + 11, 0xFFFFFFFF);
+        if (isLocked) ctx.fill(ppX, aY, ppX + PS, aY + 10, 0x55000000);
 
         super.render(ctx, mx, my, dt);
     }
 
     private void handleInputs(double mx, double my) {
+        if (isLocked) return;
+
         int ppX = px + 10, ppY = py + 26;
         boolean changed = false;
         boolean hueChanged = false;
@@ -185,6 +201,7 @@ public class GraffitiScreen extends Screen {
 
         if (hueChanged) updatePaletteTexture();
         if (changed) {
+            colorWasChanged = true;
             hexField.setValue(String.format("#%08X", (Math.round(alpha * 255) << 24) | (Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF)));
             hasPendingColorPacket = true;
         }
@@ -225,9 +242,16 @@ public class GraffitiScreen extends Screen {
     }
 
     private void flushColorPacket() {
-        if (!hasPendingColorPacket) return;
+        if (!hasPendingColorPacket && !colorWasChanged) return;
         hasPendingColorPacket = false;
-        GraffitiItem.setColor(stack, (Math.round(alpha * 255) << 24) | (Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF));
-        PacketDistributor.sendToServer(new ColorPayload(GraffitiItem.getColor(stack)));
+        int newColor = (Math.round(alpha * 255) << 24) | (Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF);
+        GraffitiItem.setColor(stack, newColor);
+
+        var player = Minecraft.getInstance().player;
+        if (player != null && !player.isCreative() && colorWasChanged) {
+            GraffitiItem.setColorLocked(stack, true);
+        }
+
+        PacketDistributor.sendToServer(new ColorPayload(newColor, brushSize, brushShape));
     }
 }

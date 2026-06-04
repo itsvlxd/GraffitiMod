@@ -65,6 +65,17 @@ public class GraffitiItem extends Item {
         saveTag(stack, tag);
     }
 
+    public static boolean isColorLocked(ItemStack stack) {
+        var tag = getTag(stack);
+        return tag.contains("ColorLocked") && tag.getBoolean("ColorLocked");
+    }
+
+    public static void setColorLocked(ItemStack stack, boolean locked) {
+        var tag = getTag(stack);
+        tag.putBoolean("ColorLocked", locked);
+        saveTag(stack, tag);
+    }
+
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag type) {
         int color = getColor(stack);
@@ -74,6 +85,9 @@ public class GraffitiItem extends Item {
                 .append(Component.literal(hexString).withStyle(net.minecraft.ChatFormatting.GRAY)));
         tooltip.add(Component.literal("Size: " + getBrushSize(stack) + " Shape: " + getShapeName(getBrushShape(stack)))
                 .withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        if (isColorLocked(stack)) {
+            tooltip.add(Component.literal("Color Locked").withStyle(net.minecraft.ChatFormatting.RED));
+        }
         super.appendHoverText(stack, context, tooltip, type);
     }
 
