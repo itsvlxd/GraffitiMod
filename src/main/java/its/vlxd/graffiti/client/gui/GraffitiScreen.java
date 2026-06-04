@@ -27,7 +27,6 @@ public class GraffitiScreen extends Screen {
     private int brushSize, brushShape;
     private EditBox hexField;
     private Button sizeDown, sizeUp, shapeBtn;
-    private boolean hasPendingColorPacket = false;
     private boolean colorWasChanged = false;
     private boolean isLocked;
 
@@ -203,7 +202,6 @@ public class GraffitiScreen extends Screen {
         if (changed) {
             colorWasChanged = true;
             hexField.setValue(String.format("#%08X", (Math.round(alpha * 255) << 24) | (Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF)));
-            hasPendingColorPacket = true;
         }
     }
 
@@ -221,13 +219,12 @@ public class GraffitiScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mx, double my, int b) { 
-        flushColorPacket(); 
         return super.mouseReleased(mx, my, b); 
     }
 
     @Override
     public void onClose() { 
-        flushColorPacket(); 
+        flushSettings(); 
         if (paletteTexture != null) paletteTexture.close(); 
         super.onClose(); 
     }
@@ -241,9 +238,7 @@ public class GraffitiScreen extends Screen {
         return super.keyPressed(key, scanCode, modifiers); 
     }
 
-    private void flushColorPacket() {
-        if (!hasPendingColorPacket && !colorWasChanged) return;
-        hasPendingColorPacket = false;
+    private void flushSettings() {
         int newColor = (Math.round(alpha * 255) << 24) | (Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF);
         GraffitiItem.setColor(stack, newColor);
 
