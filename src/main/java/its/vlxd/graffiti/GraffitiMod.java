@@ -62,7 +62,7 @@ public class GraffitiMod {
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, Integer>>> LAST_PAINT_TICK = new HashMap<>();
     private static final int IDLE_TICKS = 20;
     public static final Map<java.util.UUID, Deque<Map<Direction, int[][]>>> PLAYER_CLIPBOARD = new HashMap<>();
-    private static final long DESATURATION_INTERVAL = 720_000L;
+    private static final long DESATURATION_INTERVAL = 120_000L; // 5 in-game days
     private long lastDesatTick = 0;
 
     public GraffitiMod(IEventBus modBus) {
@@ -148,7 +148,10 @@ public class GraffitiMod {
             LOGGER.error("Failed to load graffiti data", e);
         }
 
-        lastDesatTick = event.getServer().getTickCount() - (event.getServer().getTickCount() % DESATURATION_INTERVAL);
+        var level = event.getServer().overworld();
+        lastDesatTick = level.getDayTime() - (level.getDayTime() % DESATURATION_INTERVAL);
+        LOGGER.info("Desaturation epoch aligned to dayTime={}, next desat at dayTime={}",
+                level.getDayTime(), lastDesatTick + DESATURATION_INTERVAL);
     }
 
     private void onServerStopping(ServerStoppingEvent event) {
@@ -239,7 +242,8 @@ public class GraffitiMod {
             if (ckEntry.getValue().isEmpty()) ckIter.remove();
         }
 
-        if (currentTick - lastDesatTick >= DESATURATION_INTERVAL) {
+        long dayTime = event.getServer().overworld().getDayTime();
+        if (dayTime - lastDesatTick >= DESATURATION_INTERVAL) {
             desaturateAll(event.getServer().overworld());
             lastDesatTick += DESATURATION_INTERVAL;
         }
@@ -375,9 +379,10 @@ public class GraffitiMod {
 
                     float[] hsb = new float[3];
                     Color.RGBtoHSB(r, g, b, hsb);
-                    float reduction = 0.02f + rng.nextFloat() * 0.08f;
+                    float reduction = 0.02f + rng.nextFloat() * 0.13f;
+                    float floor = Math.min(hsb[1], 0.80f);
                     hsb[1] *= (1.0f - reduction);
-                    hsb[1] = Math.max(hsb[1], 0.4f);
+                    if (hsb[1] < floor) hsb[1] = floor;
                     int rgb = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
 
                     int newColor = (a << 24) | (rgb & 0xFFFFFF);
