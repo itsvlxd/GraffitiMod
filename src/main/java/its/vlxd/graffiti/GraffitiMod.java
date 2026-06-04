@@ -11,6 +11,7 @@ import its.vlxd.graffiti.network.SyncGraffitiPayload;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -82,7 +83,8 @@ public class GraffitiMod {
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, List<int[][]>>>> UNDO_HISTORY = new HashMap<>();
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, Integer>>> LAST_PAINT_TICK = new HashMap<>();
     private static final int IDLE_TICKS = 20;
-    public static final Map<java.util.UUID, Deque<Map<Direction, int[][]>>> PLAYER_CLIPBOARD = new HashMap<>();
+    private record ClipboardEntry(ResourceLocation blockId, Map<Direction, int[][]> faces) {}
+    public static final Map<java.util.UUID, Deque<ClipboardEntry>> PLAYER_CLIPBOARD = new HashMap<>();
     private static final long DESATURATION_INTERVAL = 120_000L; // 5 in-game days
     private long lastDesatTick = 0;
     private static final Map<UUID, Integer> SUBMERGED_BRUSHES = new HashMap<>();
@@ -547,7 +549,8 @@ public class GraffitiMod {
             }
             clipboard.put(normalizedFace, copy);
         }
-        PLAYER_CLIPBOARD.computeIfAbsent(player.getUUID(), k -> new ArrayDeque<>()).addLast(clipboard);
+        ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(event.getState().getBlock());
+        PLAYER_CLIPBOARD.computeIfAbsent(player.getUUID(), k -> new ArrayDeque<>()).addLast(new ClipboardEntry(blockId, clipboard));
 
         chunk.remove(posL);
         if (chunk.isEmpty()) SERVER_CACHE.remove(ck);
@@ -570,11 +573,25 @@ public class GraffitiMod {
 
         var deque = PLAYER_CLIPBOARD.get(player.getUUID());
         if (deque == null || deque.isEmpty()) return;
-        var clipboard = deque.pollFirst();
-        if (deque.isEmpty()) PLAYER_CLIPBOARD.remove(player.getUUID());
-        if (clipboard == null || clipboard.isEmpty()) return;
 
         BlockPos pos = event.getPos();
+        ResourceLocation placedId = BuiltInRegistries.BLOCK.getKey(event.getState().getBlock());
+
+        ClipboardEntry match = null;
+        var it = deque.iterator();
+        while (it.hasNext()) {
+            ClipboardEntry e = it.next();
+            if (e.blockId().equals(placedId)) {
+                match = e;
+                it.remove();
+                break;
+            }
+        }
+        if (match == null) return;
+        if (deque.isEmpty()) PLAYER_CLIPBOARD.remove(player.getUUID());
+
+        var clipboard = match.faces();
+        if (clipboard == null || clipboard.isEmpty()) return;
         Direction facing = player.getDirection();
 
         int rotations = switch (facing) {
