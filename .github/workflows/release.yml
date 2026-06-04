@@ -84,17 +84,55 @@ jobs:
         run: |
           sed -i "s/mod_version=.*/mod_version=${{ needs.build.outputs.new_release_version }}/" gradle.properties
 
+      - name: Semantic Release (publish)
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v6
+        with:
+          extra_plugins: |
+            @semantic-release/changelog
+            @semantic-release/git
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - name: Download JAR
         uses: actions/download-artifact@v4
         with:
           name: graffiti-${{ needs.build.outputs.new_release_version }}
           path: build/libs/
 
-      - name: Semantic Release (publish)
-        uses: cycjimmy/semantic-release-action@v6
+      - name: Generate Release Notes
+        run: |
+          cat > release_body.md << 'RELEASE_EOF'
+          ## Graffiti Mod v${{ needs.build.outputs.new_release_version }}
+
+          A NeoForge mod for Minecraft 1.21.1 that lets players paint pixels on any block surface with full color customization.
+
+          ### Features
+          - Spray Can — right-click to paint (smooth, no cooldown)
+          - Full color picker (press C while holding spray can)
+          - 4 tools: Pencil, Eraser, Fill, Color Picker (switch with Ctrl + scroll or arrows)
+          - Multiplayer support with persistent graffiti
+          - Depth-aware rendering on complex block shapes
+
+          ### Installation
+          1. Install NeoForge 21.1.1+ for Minecraft 1.21.1
+          2. Place the JAR in your \`mods/\` folder
+
+          > **Note:** This is a NeoForge mod. Remove any old Fabric versions before installing.
+
+          ---
+
+          ${{ steps.semantic.outputs.new_release_notes }}
+          RELEASE_EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          extra_plugins: |
-            @semantic-release/changelog
-            @semantic-release/git
+          files: build/libs/*.jar
+          tag_name: v${{ needs.build.outputs.new_release_version }}
+          name: Graffiti Mod v${{ needs.build.outputs.new_release_version }}
+          body_path: release_body.md
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
