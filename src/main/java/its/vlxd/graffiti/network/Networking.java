@@ -296,7 +296,7 @@ public class Networking {
             var level = player.getServer().getLevel(player.level().dimension());
             if (level != null) {
                 BlockPos pos = payload.pos();
-                level.playSound(null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                level.playSound(player, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
                         GraffitiMod.SPRAY_CAN_PAINT.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
             }
         });

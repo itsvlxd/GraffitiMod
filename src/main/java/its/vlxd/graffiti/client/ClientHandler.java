@@ -193,9 +193,11 @@ public class ClientHandler {
             PacketDistributor.sendToServer(new SprayPaintPayload(pos));
         }
 
-        if (isGraffitiTool && !rightDown && lastRightDown && paintLoop != null) {
-            client.getSoundManager().stop(paintLoop);
-            paintLoop = null;
+        if (isGraffitiTool && !rightDown && lastRightDown) {
+            if (paintLoop != null) {
+                client.getSoundManager().stop(paintLoop);
+                paintLoop = null;
+            }
         }
 
         lastRightDown = rightDown;
