@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/itsvlxd/GraffitiMod/compare/v1.1.1...v1.1.2) (2026-06-04)
+
+
+### Bug Fixes
+
+* **github:** amother attempt to fix the github release workflow ([67f6980](https://github.com/itsvlxd/GraffitiMod/commit/67f6980dfe8532161e295a4ba72980a6ec58b435))
+
 ## [1.1.1](https://github.com/itsvlxd/GraffitiMod/compare/v1.1.0...v1.1.1) (2026-06-04)
 
 
