@@ -1,6 +1,8 @@
 package its.vlxd.graffiti.network;
 
 import its.vlxd.graffiti.GraffitiMod;
+import its.vlxd.graffiti.item.GraffitiItem;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.handling.IPayloadHandler;
@@ -27,7 +29,16 @@ public class Networking {
         registrar.playToServer(
                 ColorPayload.TYPE,
                 ColorPayload.CODEC,
-                (payload, context) -> {}
+                (payload, context) -> {
+                    context.enqueueWork(() -> {
+                        var player = context.player();
+                        if (player == null) return;
+                        ItemStack stack = player.getMainHandItem();
+                        if (stack.is(GraffitiMod.GRAFFITI_TOOL)) {
+                            GraffitiItem.setColor(stack, payload.color());
+                        }
+                    });
+                }
         );
 
         registrar.playToClient(

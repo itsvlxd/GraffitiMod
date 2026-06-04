@@ -39,7 +39,6 @@ java -version
 If you don't have Java 21, download it from one of these sources:
 
 - **Oracle JDK** — [https://www.oracle.com/java/technologies/downloads/#java21](https://www.oracle.com/java/technologies/downloads/#java21)
-- **OpenJDK (Adoptium)** — [https://adoptium.net/temurin/releases/?version=21](https://adoptium.net/temurin/releases/?version=21)
 
 After installing, verify:
 
@@ -93,16 +92,6 @@ Then reload with `source ~/.bashrc` and run:
 ```
 
 ## Deploying on a server
-
-### Important: Remove old Fabric versions
-
-If you previously used the Fabric version of this mod (`by.righttwixys.graffiti`), the old JAR **must be removed** from your server's `mods/` folder. Leaving the old Fabric JAR alongside the new NeoForge JAR will cause a crash on startup:
-
-```
-Caused by: java.lang.ClassNotFoundException: net.minecraft.client.gui.screens.Screen
-```
-
-The old Fabric mod references client-only classes and cannot run on a server, even with compatibility layers like Sinytra Connector.
 
 ### Steps
 
