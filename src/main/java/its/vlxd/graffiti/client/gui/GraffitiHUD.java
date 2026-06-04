@@ -22,6 +22,8 @@ public class GraffitiHUD {
 
     private static boolean lastA = false;
     private static boolean lastD = false;
+    private static boolean lastLeft = false;
+    private static boolean lastRight = false;
 
     private static final Component[] TOOL_NAMES = {
             Component.translatable("hud.graffiti.tool.pencil"),
@@ -52,21 +54,23 @@ public class GraffitiHUD {
 
             boolean isADown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_A) == GLFW.GLFW_PRESS;
             boolean isDDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_D) == GLFW.GLFW_PRESS;
+            boolean isLeftDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT) == GLFW.GLFW_PRESS;
+            boolean isRightDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_RIGHT) == GLFW.GLFW_PRESS;
 
-            if (isADown && !lastA) {
-                selectedIndex = (selectedIndex <= 0) ? 3 : selectedIndex - 1;
-                playClickSound(client);
-            }
-            if (isDDown && !lastD) {
-                selectedIndex = (selectedIndex >= 3) ? 0 : selectedIndex + 1;
-                playClickSound(client);
-            }
+            if (isADown && !lastA) { switchTool(-1); }
+            if (isDDown && !lastD) { switchTool(1); }
+            if (isLeftDown && !lastLeft) { switchTool(-1); }
+            if (isRightDown && !lastRight) { switchTool(1); }
 
             lastA = isADown;
             lastD = isDDown;
+            lastLeft = isLeftDown;
+            lastRight = isRightDown;
         } else {
             lastA = false;
             lastD = false;
+            lastLeft = false;
+            lastRight = false;
         }
     }
 
@@ -83,7 +87,15 @@ public class GraffitiHUD {
         if (hudAlpha > 0) render(guiGraphics, client);
     }
 
-    private static void playClickSound(Minecraft client) {
+    public static void switchTool(int delta) {
+        selectedIndex = Math.floorMod(selectedIndex + delta, 4);
+        var client = Minecraft.getInstance();
+        if (client.player != null) {
+            client.player.playSound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_HAT.value(), 0.4f, 1.8f);
+        }
+    }
+
+    public static void playClickSound(Minecraft client) {
         if (client.player != null) {
             client.player.playSound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_HAT.value(), 0.4f, 1.8f);
         }
