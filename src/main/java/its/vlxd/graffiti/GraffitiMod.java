@@ -2,6 +2,7 @@ package its.vlxd.graffiti;
 
 import its.vlxd.graffiti.item.GraffitiItem;
 import its.vlxd.graffiti.network.ColorPayload;
+import its.vlxd.graffiti.network.FaceSyncPayload;
 import its.vlxd.graffiti.network.Networking;
 import its.vlxd.graffiti.network.PaintPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
@@ -22,9 +23,11 @@ import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +51,10 @@ public class GraffitiMod {
 
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, int[][]>>> SERVER_CACHE = new HashMap<>();
 
+    public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, List<int[][]>>>> UNDO_HISTORY = new HashMap<>();
+    public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, Integer>>> LAST_PAINT_TICK = new HashMap<>();
+    private static final int IDLE_TICKS = 20;
+
     public GraffitiMod(IEventBus modBus) {
         TABS.register("graffiti_group", () -> CreativeModeTab.builder()
                 .icon(() -> new ItemStack(GRAFFITI_TOOL.get()))
@@ -65,6 +72,7 @@ public class GraffitiMod {
         bus.addListener(this::onServerStarted);
         bus.addListener(this::onServerStopping);
         bus.addListener(this::onPlayerLogin);
+        bus.addListener(this::onServerTick);
     }
 
     private void addToVanillaTabs(BuildCreativeModeTabContentsEvent event) {
@@ -75,6 +83,8 @@ public class GraffitiMod {
 
     private void onServerStarted(ServerStartedEvent event) {
         SERVER_CACHE.clear();
+        UNDO_HISTORY.clear();
+        LAST_PAINT_TICK.clear();
         File file = new File(event.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(), "graffiti.bin");
         if (!file.exists()) return;
 
@@ -189,5 +199,176 @@ public class GraffitiMod {
                 PacketDistributor.sendToPlayer((ServerPlayer) player, new SyncGraffitiPayload(syncData));
             }
         });
+    }
+
+    public void onServerTick(ServerTickEvent.Post event) {
+        int currentTick = event.getServer().getTickCount();
+
+        var ckIter = LAST_PAINT_TICK.entrySet().iterator();
+        while (ckIter.hasNext()) {
+            var ckEntry = ckIter.next();
+            long ck = ckEntry.getKey();
+            var blockIter = ckEntry.getValue().entrySet().iterator();
+            while (blockIter.hasNext()) {
+                var blockEntry = blockIter.next();
+                long posL = blockEntry.getKey();
+                var faceIter = blockEntry.getValue().entrySet().iterator();
+                while (faceIter.hasNext()) {
+                    var faceEntry = faceIter.next();
+                    if (currentTick - faceEntry.getValue() > IDLE_TICKS) {
+                        saveSnapshot(ck, posL, faceEntry.getKey());
+                        faceIter.remove();
+                    }
+                }
+                if (blockEntry.getValue().isEmpty()) blockIter.remove();
+            }
+            if (ckEntry.getValue().isEmpty()) ckIter.remove();
+        }
+    }
+
+    public static void saveSnapshot(long ck, long posL, net.minecraft.core.Direction side) {
+        var chunk = SERVER_CACHE.get(ck);
+        if (chunk == null) return;
+        var faces = chunk.get(posL);
+        if (faces == null) return;
+        int[][] grid = faces.get(side);
+        if (grid == null) return;
+
+        int[][] copy = new int[16][16];
+        for (int u = 0; u < 16; u++) {
+            System.arraycopy(grid[u], 0, copy[u], 0, 16);
+        }
+
+        var history = UNDO_HISTORY
+                .computeIfAbsent(ck, k -> new HashMap<>())
+                .computeIfAbsent(posL, k -> new HashMap<>())
+                .computeIfAbsent(side, k -> new ArrayList<>());
+
+        if (!history.isEmpty()) {
+            int[][] last = history.get(history.size() - 1);
+            boolean same = true;
+            outer: for (int u = 0; u < 16; u++) {
+                for (int v = 0; v < 16; v++) {
+                    if (last[u][v] != copy[u][v]) { same = false; break outer; }
+                }
+            }
+            if (same) return;
+        }
+
+        history.add(copy);
+        if (history.size() > 20) history.remove(0);
+    }
+
+    public static int[][] handleUndo(long ck, long posL, net.minecraft.core.Direction side) {
+        return handleUndoRedo(ck, posL, side, false);
+    }
+
+    public static int[][] handleRedo(long ck, long posL, net.minecraft.core.Direction side) {
+        return handleUndoRedo(ck, posL, side, true);
+    }
+
+    private static int[][] handleUndoRedo(long ck, long posL, net.minecraft.core.Direction side, boolean redo) {
+        var chunk = UNDO_HISTORY.get(ck);
+        if (chunk == null) return null;
+        var faces = chunk.get(posL);
+        if (faces == null) return null;
+        var history = faces.get(side);
+        if (history == null || history.isEmpty()) return null;
+
+        var currentChunk = SERVER_CACHE.get(ck);
+        var currentFaces = currentChunk != null ? currentChunk.get(posL) : null;
+        int[][] currentGrid = currentFaces != null ? currentFaces.get(side) : null;
+        if (currentGrid == null) {
+            currentGrid = new int[16][16];
+            if (currentFaces == null) {
+                currentFaces = new EnumMap<>(net.minecraft.core.Direction.class);
+                currentChunk.put(posL, currentFaces);
+            }
+            currentFaces.put(side, currentGrid);
+        }
+
+        int currentIdx = -1;
+        for (int i = 0; i < history.size(); i++) {
+            boolean match = true;
+            int[][] hGrid = history.get(i);
+            for (int u = 0; u < 16 && match; u++) {
+                for (int v = 0; v < 16 && match; v++) {
+                    if (hGrid[u][v] != currentGrid[u][v]) match = false;
+                }
+            }
+            if (match) {
+                currentIdx = i;
+                break;
+            }
+        }
+
+        int targetIdx;
+        if (redo) {
+            if (currentIdx >= history.size() - 1) return null;
+            targetIdx = currentIdx + 1;
+        } else {
+            if (currentIdx <= 0) return null;
+            targetIdx = currentIdx - 1;
+        }
+
+        int[][] target = history.get(targetIdx);
+        for (int u = 0; u < 16; u++) {
+            System.arraycopy(target[u], 0, currentGrid[u], 0, 16);
+        }
+
+        // Discard future history if user paints later (handled in paint handler)
+        return currentGrid;
+    }
+
+    public static void broadcastFace(net.minecraft.core.BlockPos pos, net.minecraft.core.Direction side, int[][] grid, ServerLevel level) {
+        int[] flat = new int[256];
+        for (int u = 0; u < 16; u++) {
+            for (int v = 0; v < 16; v++) {
+                flat[u * 16 + v] = grid[u][v];
+            }
+        }
+        var payload = new FaceSyncPayload(pos, side, flat);
+        for (var player : level.players()) {
+            PacketDistributor.sendToPlayer(player, payload);
+        }
+    }
+
+    public static void recordPaintTick(long ck, long posL, net.minecraft.core.Direction side, int tick) {
+        LAST_PAINT_TICK.computeIfAbsent(ck, k -> new HashMap<>())
+                .computeIfAbsent(posL, k -> new EnumMap<>(net.minecraft.core.Direction.class))
+                .put(side, tick);
+    }
+
+    public static void discardFutureHistory(long ck, long posL, net.minecraft.core.Direction side) {
+        var chunk = UNDO_HISTORY.get(ck);
+        if (chunk == null) return;
+        var faces = chunk.get(posL);
+        if (faces == null) return;
+        var history = faces.get(side);
+        if (history == null) return;
+
+        if (history.size() <= 1) return;
+
+        int[][] current = null;
+        var sc = SERVER_CACHE.get(ck);
+        if (sc != null) {
+            var fc = sc.get(posL);
+            if (fc != null) current = fc.get(side);
+        }
+        if (current == null) return;
+
+        for (int i = 0; i < history.size(); i++) {
+            boolean match = true;
+            int[][] h = history.get(i);
+            for (int u = 0; u < 16 && match; u++) {
+                for (int v = 0; v < 16 && match; v++) {
+                    if (h[u][v] != current[u][v]) match = false;
+                }
+            }
+            if (match) {
+                history.subList(i + 1, history.size()).clear();
+                return;
+            }
+        }
     }
 }

@@ -6,16 +6,25 @@ import its.vlxd.graffiti.client.renderer.GraffitiRenderer;
 import its.vlxd.graffiti.client.renderer.PixelOutlineRenderer;
 import its.vlxd.graffiti.config.GraffitiConfig;
 import its.vlxd.graffiti.item.GraffitiItem;
+import its.vlxd.graffiti.network.FaceSyncPayload;
 import its.vlxd.graffiti.network.PaintPayload;
+import its.vlxd.graffiti.network.SnapshotPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
+import its.vlxd.graffiti.network.UndoPayload;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Objects;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -27,17 +36,23 @@ import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.lwjgl.glfw.GLFW;
 
 @EventBusSubscriber(modid = GraffitiMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class ClientHandler {
     private static boolean lastC = false;
+    private static boolean lastZ = false;
+    private static boolean lastY = false;
 
     private static BlockPos lastPaintPos = null;
     private static Direction lastPaintSide = null;
     private static int lastPaintU = -1;
     private static int lastPaintV = -1;
+
+    private static BlockPos lastLookPos = null;
+    private static Direction lastLookSide = null;
 
 
 
@@ -84,11 +99,44 @@ public class ClientHandler {
 
         boolean hasItem = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get());
         boolean isCKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_C) == GLFW.GLFW_PRESS;
+        boolean isZKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_Z) == GLFW.GLFW_PRESS;
+        boolean isYKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_Y) == GLFW.GLFW_PRESS;
 
         if (hasItem && isCKey && !lastC) {
             ClientItemHandler.openScreen(client.player.getMainHandItem());
         }
         lastC = isCKey;
+
+        if (hasItem && isZKey && !lastZ && client.hitResult instanceof BlockHitResult zh) {
+            PacketDistributor.sendToServer(new UndoPayload(zh.getBlockPos(), zh.getDirection(), false));
+        }
+        lastZ = isZKey;
+
+        if (hasItem && isYKey && !lastY && client.hitResult instanceof BlockHitResult yh) {
+            PacketDistributor.sendToServer(new UndoPayload(yh.getBlockPos(), yh.getDirection(), true));
+        }
+        lastY = isYKey;
+
+        if (hasItem) {
+            BlockPos currentLookPos = null;
+            Direction currentLookSide = null;
+            if (client.hitResult instanceof BlockHitResult lh) {
+                currentLookPos = lh.getBlockPos();
+                currentLookSide = lh.getDirection();
+            }
+
+            if (!Objects.equals(currentLookPos, lastLookPos) || currentLookSide != lastLookSide) {
+                if (lastLookPos != null && lastLookSide != null
+                        && lastLookPos.equals(lastPaintPos) && lastLookSide == lastPaintSide) {
+                    PacketDistributor.sendToServer(new SnapshotPayload(lastLookPos, lastLookSide));
+                }
+                lastLookPos = currentLookPos;
+                lastLookSide = currentLookSide;
+            }
+        } else {
+            lastLookPos = null;
+            lastLookSide = null;
+        }
 
         if (hasItem) {
             int color = GraffitiItem.getColor(client.player.getMainHandItem());
@@ -160,6 +208,20 @@ public class ClientHandler {
     public static void handlePaintPacket(PaintPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             GraffitiRenderer.addPixelToCache(payload);
+        });
+    }
+
+    public static void handleFaceSync(FaceSyncPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            int[][] grid = new int[16][16];
+            for (int i = 0; i < 256; i++) {
+                grid[i / 16][i % 16] = payload.flatGrid()[i];
+            }
+            long ck = ChunkPos.asLong(payload.pos().getX() >> 4, payload.pos().getZ() >> 4);
+            GraffitiRenderer.GRAFFITI_CACHE
+                    .computeIfAbsent(ck, k -> new HashMap<>())
+                    .computeIfAbsent(payload.pos().asLong(), k -> new EnumMap<>(Direction.class))
+                    .put(payload.side(), grid);
         });
     }
 

@@ -1,12 +1,15 @@
 package its.vlxd.graffiti.client.gui;
 
 import its.vlxd.graffiti.GraffitiMod;
+import its.vlxd.graffiti.network.SnapshotPayload;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.world.phys.BlockHitResult;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
 public class GraffitiHUD {
@@ -81,6 +84,9 @@ public class GraffitiHUD {
         var client = Minecraft.getInstance();
         if (client.player != null) {
             client.player.playSound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_HAT.value(), 0.4f, 1.8f);
+            if (client.hitResult instanceof BlockHitResult hit) {
+                PacketDistributor.sendToServer(new SnapshotPayload(hit.getBlockPos(), hit.getDirection()));
+            }
         }
     }
 
