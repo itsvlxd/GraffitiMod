@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/itsvlxd/GraffitiMod/compare/v1.1.0...v1.1.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* **github:** fix github workflow not properly updating the gradle mod version ([65ff664](https://github.com/itsvlxd/GraffitiMod/commit/65ff66410aee1a3d6bc59827be4b60ba4295ab56))
+
 # [1.1.0](https://github.com/itsvlxd/GraffitiMod/compare/v1.0.0...v1.1.0) (2026-06-04)
 
 
