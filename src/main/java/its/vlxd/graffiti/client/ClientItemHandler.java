@@ -39,7 +39,7 @@ public class ClientItemHandler {
             int u = Math.min(15, Math.max(0, getCoord(r, side, true)));
             int v = Math.min(15, Math.max(0, getCoord(r, side, false)));
 
-            int toolIndex = GraffitiHUD.selectedIndex;
+            int toolIndex = GraffitiItem.getToolMode(stack);
 
             switch (toolIndex) {
                 case 0 -> {
@@ -47,14 +47,10 @@ public class ClientItemHandler {
                     client.level.playSound(client.player, pos, net.minecraft.sounds.SoundEvents.AZALEA_LEAVES_BREAK, SoundSource.PLAYERS, 0.5f, 1.5f);
                 }
                 case 1 -> {
-                    draw(pos, side, u, v, 0);
-                    client.level.playSound(client.player, pos, net.minecraft.sounds.SoundEvents.AZALEA_LEAVES_BREAK, SoundSource.PLAYERS, 0.4f, 0.8f);
-                }
-                case 2 -> {
                     floodFill(pos, side, u, v, itemColor);
                     client.level.playSound(client.player, pos, net.minecraft.sounds.SoundEvents.AZALEA_LEAVES_PLACE, SoundSource.PLAYERS, 0.7f, 1.2f);
                 }
-                case 3 -> {
+                case 2 -> {
                     pickColor(pos, side, u, v, stack);
                     client.level.playSound(client.player, pos, net.minecraft.sounds.SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.PLAYERS, 0.8f, 1.0f);
                 }
@@ -85,7 +81,7 @@ public class ClientItemHandler {
                 GraffitiItem.setColorLocked(stack, true);
             }
             GraffitiItem.setColor(stack, newColor);
-            PacketDistributor.sendToServer(new ColorPayload(newColor, GraffitiItem.getBrushSize(stack), GraffitiItem.getBrushShape(stack)));
+            PacketDistributor.sendToServer(new ColorPayload(newColor, GraffitiItem.getBrushSize(stack), GraffitiItem.getBrushShape(stack), GraffitiItem.getToolMode(stack)));
         }
     }
 

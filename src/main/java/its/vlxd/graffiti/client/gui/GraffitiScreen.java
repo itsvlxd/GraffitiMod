@@ -24,9 +24,9 @@ public class GraffitiScreen extends Screen {
     private final ItemStack stack;
     private int px, py;
     private float hue, saturation, brightness, alpha;
-    private int brushSize, brushShape;
+    private int brushSize, brushShape, toolMode;
     private EditBox hexField;
-    private Button sizeDown, sizeUp, shapeBtn;
+    private Button sizeDown, sizeUp, shapeBtn, toolBtn;
     private boolean colorWasChanged = false;
     private boolean isLocked;
 
@@ -35,6 +35,7 @@ public class GraffitiScreen extends Screen {
 
     private static final int[] SIZES = {1, 2, 3, 4, 5, 6, 7, 8};
     private static final String[] SHAPES = {"Square", "Circle", "Rounded", "Cloud", "Leaky"};
+    private static final String[] TOOLS = {"Pencil", "Fill", "Picker"};
 
     public GraffitiScreen(ItemStack stack) {
         super(Component.literal("Graffiti Editor"));
@@ -65,6 +66,7 @@ public class GraffitiScreen extends Screen {
         alpha = ((ic >> 24) & 0xFF) / 255f;
         brushSize = GraffitiItem.getBrushSize(stack);
         brushShape = GraffitiItem.getBrushShape(stack);
+        toolMode = GraffitiItem.getToolMode(stack);
 
         hexField = new EditBox(font, px + 172, py + 77, 65, 16, Component.literal("Hex"));
         hexField.setValue(String.format("#%08X", ic));
@@ -89,6 +91,17 @@ public class GraffitiScreen extends Screen {
             GraffitiItem.setBrushShape(stack, brushShape);
         }).bounds(px + 165, py + 121, 72, 16).tooltip(Tooltip.create(Component.literal("Cycle brush shape"))).build();
         addRenderableWidget(shapeBtn);
+
+        toolBtn = Button.builder(Component.literal(TOOLS[toolMode]), b -> {
+            if (isLocked) {
+                toolMode = (toolMode + 1) % 2;
+            } else {
+                toolMode = (toolMode + 1) % 3;
+            }
+            toolBtn.setMessage(Component.literal(TOOLS[toolMode]));
+            GraffitiItem.setToolMode(stack, toolMode);
+        }).bounds(px + 165, py + 143, 72, 16).tooltip(Tooltip.create(Component.literal("Cycle tool mode"))).build();
+        addRenderableWidget(toolBtn);
 
         updatePaletteTexture();
     }
@@ -139,8 +152,8 @@ public class GraffitiScreen extends Screen {
         ctx.fill(sx - 2, sy - 2, sx + 3, sy + 3, 0xFFFFFFFF);
 
         int rX = px + 117, rY = ppY;
-        ctx.fill(rX, rY, rX + 126, rY + 116, 0xFF151515);
-        ctx.renderOutline(rX, rY, 126, 116, 0xFF444444);
+        ctx.fill(rX, rY, rX + 126, rY + 136, 0xFF151515);
+        ctx.renderOutline(rX, rY, 126, 136, 0xFF444444);
 
         int live = (Math.round(alpha * 255) << 24) | (Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF);
         ctx.fill(rX + 4, rY + 4, rX + 122, rY + 26, live);
@@ -150,6 +163,7 @@ public class GraffitiScreen extends Screen {
         ctx.drawString(font, Component.literal("Hex Code:"), rX + 6, rY + 54, 0x888888);
         ctx.drawString(font, Component.literal("Size:"), rX + 6, rY + 76, 0x888888);
         ctx.drawString(font, Component.literal("Shape:"), rX + 6, rY + 98, 0x888888);
+        ctx.drawString(font, Component.literal("Mode:"), rX + 6, rY + 120, 0x888888);
 
         String sizeStr = String.valueOf(brushSize);
         int sizeTextWidth = font.width(sizeStr);
@@ -247,6 +261,6 @@ public class GraffitiScreen extends Screen {
             GraffitiItem.setColorLocked(stack, true);
         }
 
-        PacketDistributor.sendToServer(new ColorPayload(newColor, brushSize, brushShape));
+        PacketDistributor.sendToServer(new ColorPayload(newColor, brushSize, brushShape, toolMode));
     }
 }

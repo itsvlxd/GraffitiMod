@@ -64,6 +64,7 @@ public class Networking {
                         GraffitiItem.setColor(stack, payload.color());
                         GraffitiItem.setBrushSize(stack, payload.brushSize());
                         GraffitiItem.setBrushShape(stack, payload.brushShape());
+                        GraffitiItem.setToolMode(stack, payload.toolMode());
                         if (!player.isCreative()) GraffitiItem.setColorLocked(stack, true);
                     });
                 }

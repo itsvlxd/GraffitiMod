@@ -20,6 +20,9 @@ public class GraffitiItem extends Item {
     public static final int SHAPE_ROUNDED = 2;
     public static final int SHAPE_CLOUD = 3;
     public static final int SHAPE_LEAKY = 4;
+    public static final int TOOL_PENCIL = 0;
+    public static final int TOOL_FILL = 1;
+    public static final int TOOL_PICKER = 2;
 
     public GraffitiItem(Properties properties) { super(properties); }
 
@@ -76,6 +79,17 @@ public class GraffitiItem extends Item {
         saveTag(stack, tag);
     }
 
+    public static int getToolMode(ItemStack stack) {
+        var tag = getTag(stack);
+        return tag.contains("ToolMode") ? tag.getInt("ToolMode") : TOOL_PENCIL;
+    }
+
+    public static void setToolMode(ItemStack stack, int mode) {
+        var tag = getTag(stack);
+        tag.putInt("ToolMode", Math.max(0, Math.min(2, mode)));
+        saveTag(stack, tag);
+    }
+
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag type) {
         int color = getColor(stack);
@@ -84,6 +98,8 @@ public class GraffitiItem extends Item {
                 .append(": ")
                 .append(Component.literal(hexString).withStyle(net.minecraft.ChatFormatting.GRAY)));
         tooltip.add(Component.literal("Size: " + getBrushSize(stack) + " Shape: " + getShapeName(getBrushShape(stack)))
+                .withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        tooltip.add(Component.literal("Mode: " + getToolName(getToolMode(stack)))
                 .withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
         int remaining = stack.getMaxDamage() - stack.getDamageValue();
         tooltip.add(Component.literal("Paint: " + remaining + "/" + stack.getMaxDamage())
@@ -101,6 +117,14 @@ public class GraffitiItem extends Item {
             case SHAPE_CLOUD -> "Cloud";
             case SHAPE_LEAKY -> "Leaky";
             default -> "Square";
+        };
+    }
+
+    public static String getToolName(int mode) {
+        return switch (mode) {
+            case TOOL_FILL -> "Fill";
+            case TOOL_PICKER -> "Picker";
+            default -> "Pencil";
         };
     }
 

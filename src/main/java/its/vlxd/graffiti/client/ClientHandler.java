@@ -35,7 +35,6 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
@@ -74,7 +73,6 @@ public class ClientHandler {
         NeoForge.EVENT_BUS.addListener(ClientHandler::onRenderLevelStage);
         NeoForge.EVENT_BUS.addListener(ClientHandler::onClientTick);
         NeoForge.EVENT_BUS.addListener(ClientHandler::onRenderFrame);
-        NeoForge.EVENT_BUS.addListener(ClientHandler::onMouseScroll);
         NeoForge.EVENT_BUS.addListener(ClientHandler::onRenderGui);
 
         ClientPlayConnection.JOIN.register(() -> clearClientCache());
@@ -99,7 +97,7 @@ public class ClientHandler {
     }
 
     public static void onClientTick(ClientTickEvent.Post event) {
-        GraffitiHUD.onClientTick();
+        GraffitiHUD.init();
 
         var client = Minecraft.getInstance();
         if (client.player == null) return;
@@ -253,21 +251,6 @@ public class ClientHandler {
     }
 
     public static void onRenderGui(RenderGuiEvent.Post event) {
-        var client = Minecraft.getInstance();
-        GraffitiHUD.renderOverlay(event.getGuiGraphics(), event.getPartialTick().getGameTimeDeltaTicks(), client.getWindow().getGuiScaledWidth(), client.getWindow().getGuiScaledHeight());
-    }
-
-    public static void onMouseScroll(InputEvent.MouseScrollingEvent event) {
-        var client = Minecraft.getInstance();
-        if (client.player == null) return;
-
-        boolean hasItem = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get());
-        boolean isCtrlDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS;
-
-        if (hasItem && isCtrlDown) {
-            GraffitiHUD.switchTool(event.getScrollDeltaY() > 0 ? 1 : -1);
-            event.setCanceled(true);
-        }
     }
 
     private static void clearClientCache() {
