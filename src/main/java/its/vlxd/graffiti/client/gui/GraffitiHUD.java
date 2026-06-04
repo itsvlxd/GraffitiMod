@@ -20,8 +20,6 @@ public class GraffitiHUD {
     private static float hudAlpha = 0.0f;
     private static final float FADE_SPEED = 0.1f;
 
-    private static boolean lastA = false;
-    private static boolean lastD = false;
     private static boolean lastLeft = false;
     private static boolean lastRight = false;
 
@@ -45,30 +43,15 @@ public class GraffitiHUD {
         boolean isCtrlDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS;
 
         if (hasItem && isCtrlDown) {
-            var options = client.options;
-            options.keyUp.setDown(false);
-            options.keyDown.setDown(false);
-            options.keyLeft.setDown(false);
-            options.keyRight.setDown(false);
-            options.keyJump.setDown(false);
-
-            boolean isADown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_A) == GLFW.GLFW_PRESS;
-            boolean isDDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_D) == GLFW.GLFW_PRESS;
             boolean isLeftDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT) == GLFW.GLFW_PRESS;
             boolean isRightDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_RIGHT) == GLFW.GLFW_PRESS;
 
-            if (isADown && !lastA) { switchTool(-1); }
-            if (isDDown && !lastD) { switchTool(1); }
             if (isLeftDown && !lastLeft) { switchTool(-1); }
             if (isRightDown && !lastRight) { switchTool(1); }
 
-            lastA = isADown;
-            lastD = isDDown;
             lastLeft = isLeftDown;
             lastRight = isRightDown;
         } else {
-            lastA = false;
-            lastD = false;
             lastLeft = false;
             lastRight = false;
         }

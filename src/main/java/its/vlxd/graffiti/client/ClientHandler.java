@@ -9,8 +9,11 @@ import its.vlxd.graffiti.item.GraffitiItem;
 import its.vlxd.graffiti.network.PaintPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -18,16 +21,21 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.lwjgl.glfw.GLFW;
 
 @EventBusSubscriber(modid = GraffitiMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class ClientHandler {
     private static boolean lastC = false;
+
+    private static BlockPos lastPaintPos = null;
+    private static Direction lastPaintSide = null;
+    private static int lastPaintU = -1;
+    private static int lastPaintV = -1;
 
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
@@ -37,7 +45,7 @@ public class ClientHandler {
 
         NeoForge.EVENT_BUS.addListener(ClientHandler::onRenderLevelStage);
         NeoForge.EVENT_BUS.addListener(ClientHandler::onClientTick);
-        NeoForge.EVENT_BUS.addListener(ClientHandler::onRightClickBlock);
+        NeoForge.EVENT_BUS.addListener(ClientHandler::onRenderFrame);
         NeoForge.EVENT_BUS.addListener(ClientHandler::onMouseScroll);
         NeoForge.EVENT_BUS.addListener(ClientHandler::onRenderGui);
 
@@ -69,7 +77,6 @@ public class ClientHandler {
 
         var client = Minecraft.getInstance();
         if (client.player == null) return;
-        if (client.screen != null) return;
 
         boolean hasItem = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get());
         boolean isCKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_C) == GLFW.GLFW_PRESS;
@@ -80,22 +87,35 @@ public class ClientHandler {
         lastC = isCKey;
     }
 
+    public static void onRenderFrame(RenderFrameEvent.Pre event) {
+        var client = Minecraft.getInstance();
+        if (client.player == null) return;
+        if (client.screen != null) return;
+
+        if (!client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get())) return;
+
+        if (GLFW.glfwGetMouseButton(client.getWindow().getWindow(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) != GLFW.GLFW_PRESS) return;
+        if (!(client.hitResult instanceof BlockHitResult hit)) return;
+
+        BlockPos pos = hit.getBlockPos();
+        Direction side = hit.getDirection();
+        Vec3 r = hit.getLocation().subtract(Vec3.atLowerCornerOf(pos));
+        int u = Math.min(15, Math.max(0, ClientItemHandler.getCoord(r, side, true)));
+        int v = Math.min(15, Math.max(0, ClientItemHandler.getCoord(r, side, false)));
+
+        if (pos.equals(lastPaintPos) && side == lastPaintSide && u == lastPaintU && v == lastPaintV) return;
+
+        lastPaintPos = pos;
+        lastPaintSide = side;
+        lastPaintU = u;
+        lastPaintV = v;
+
+        ClientItemHandler.handleAttack(hit);
+    }
+
     public static void onRenderGui(RenderGuiEvent.Post event) {
         var client = Minecraft.getInstance();
         GraffitiHUD.renderOverlay(event.getGuiGraphics(), event.getPartialTick().getGameTimeDeltaTicks(), client.getWindow().getGuiScaledWidth(), client.getWindow().getGuiScaledHeight());
-    }
-
-    public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
-        if (!event.getLevel().isClientSide) return;
-        var player = event.getEntity();
-        if (player == null) return;
-        if (!player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get())) return;
-
-        var client = Minecraft.getInstance();
-        if (client.hitResult instanceof BlockHitResult hit) {
-            ClientItemHandler.handleAttack(hit);
-            event.setCanceled(true);
-        }
     }
 
     public static void onMouseScroll(InputEvent.MouseScrollingEvent event) {

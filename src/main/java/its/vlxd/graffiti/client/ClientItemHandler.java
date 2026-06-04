@@ -133,7 +133,7 @@ public class ClientItemHandler {
         PacketDistributor.sendToServer(p);
     }
 
-    private static int getCoord(Vec3 r, Direction s, boolean isU) {
+    public static int getCoord(Vec3 r, Direction s, boolean isU) {
         if (isU) {
             return (int) (switch (s) {
                 case UP, DOWN, NORTH, SOUTH -> r.x;
