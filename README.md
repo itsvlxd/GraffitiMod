@@ -4,9 +4,9 @@ A **NeoForge** mod for Minecraft **1.21.1** that lets players paint pixels on an
 
 ## Features
 
-- **Spray Can item** — right-click to open the color editor, left-click to paint
-- **Full color picker** — HSB palette, hue/alpha sliders, HEX input, brush size control
-- **4 tools** — Pencil, Eraser, Fill, Color Picker (switch with Ctrl + A/D)
+- **Spray Can item** — right-click a block face to paint, no cooldown (per-frame painting for smooth lines)
+- **Full color picker** — HSB palette, hue/alpha sliders, HEX input, brush size control (press **C** while holding the spray can)
+- **4 tools** — Pencil, Eraser, Fill, Color Picker (switch with **mouse scroll** or **LEFT/RIGHT arrows** while holding Ctrl)
 - **HUD tool selector** — smooth fade-in/out overlay when holding Ctrl + spray can
 - **Adjustable brush size** — paint multiple pixels at once
 - **Depth-aware rendering** — pixels follow stairs, slabs, and complex block shapes
@@ -113,10 +113,12 @@ After the first run, a config file is created at `config/graffiti.json`:
 
 | Action | Input |
 |--------|-------|
-| Open color editor | Right-click with spray can |
-| Paint pixel | Left-click on a block face |
-| Switch tool | Hold Ctrl + A (left) / D (right) |
+| Paint pixel | Right-click on a block face |
+| Open color editor | **C** key (while holding spray can) |
+| Switch tool | Hold Ctrl + **mouse scroll** or **LEFT/RIGHT arrows** |
 | Tools | Pencil, Eraser, Fill, Color Picker |
+
+> **JEI** shows the crafting recipe (search "Graffiti Can", "Graffiti Spray", or "Spray Can") and an info tab with usage instructions.
 
 ## Troubleshooting
 
