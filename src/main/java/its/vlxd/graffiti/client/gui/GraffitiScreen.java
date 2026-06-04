@@ -17,6 +17,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.awt.Color;
 
+// FIX: add fallback to sqaure for any brush if the size is 1
+
 public class GraffitiScreen extends Screen {
     private static final int PS = 100;
     private static final int W = 260, H = 185;

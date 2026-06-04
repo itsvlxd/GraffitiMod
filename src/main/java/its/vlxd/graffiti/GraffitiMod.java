@@ -1,6 +1,7 @@
 package its.vlxd.graffiti;
 
 import its.vlxd.graffiti.item.GraffitiItem;
+import its.vlxd.graffiti.item.BrushItem;
 import its.vlxd.graffiti.network.CleanPayload;
 import its.vlxd.graffiti.network.ColorPayload;
 import its.vlxd.graffiti.network.FaceSyncPayload;
@@ -67,10 +68,10 @@ public class GraffitiMod {
     public static final DeferredHolder<Item, GraffitiItem> GRAFFITI_TOOL =
             ITEMS.register("graffiti_tool", () -> new GraffitiItem(new Item.Properties().stacksTo(1).durability(12800)));
 
-    public static final DeferredHolder<Item, Item> BRUSH =
-            ITEMS.register("brush", () -> new Item(new Item.Properties().stacksTo(1)));
-    public static final DeferredHolder<Item, Item> WET_BRUSH =
-            ITEMS.register("wet_brush", () -> new Item(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<Item, BrushItem> BRUSH =
+            ITEMS.register("brush", () -> new BrushItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<Item, BrushItem> WET_BRUSH =
+            ITEMS.register("wet_brush", () -> new BrushItem(new Item.Properties().stacksTo(1).durability(200)));
 
     public static final DeferredHolder<SoundEvent, SoundEvent> SPRAY_CAN_EQUIP =
             SOUND_EVENTS.register("item.spray_can_equip", () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "item.spray_can_equip")));
@@ -301,7 +302,10 @@ public class GraffitiMod {
                 if (entry.getValue() == -1) {
                     entry.setValue(currentTick);
                 } else if (currentTick - entry.getValue() >= 40) {
-                    ie.setItem(new ItemStack(WET_BRUSH.get()));
+                    ItemStack wet = new ItemStack(WET_BRUSH.get());
+                    BrushItem.setSize(wet, BrushItem.getSize(ie.getItem()));
+                    BrushItem.setShape(wet, BrushItem.getShape(ie.getItem()));
+                    ie.setItem(wet);
                     ((ServerLevel) ie.level()).sendParticles(
                             ParticleTypes.BUBBLE, ie.getX(), ie.getY() + 0.5, ie.getZ(),
                             12, 0.3, 0.3, 0.3, 0.05

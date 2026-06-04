@@ -1,9 +1,11 @@
 package its.vlxd.graffiti.client;
 
 import its.vlxd.graffiti.GraffitiMod;
+import its.vlxd.graffiti.client.gui.BrushScreen;
 import its.vlxd.graffiti.client.gui.GraffitiHUD;
 import its.vlxd.graffiti.client.renderer.GraffitiRenderer;
 import its.vlxd.graffiti.config.GraffitiConfig;
+import its.vlxd.graffiti.item.BrushItem;
 import its.vlxd.graffiti.item.GraffitiItem;
 import its.vlxd.graffiti.network.CleanPayload;
 import its.vlxd.graffiti.network.FaceSyncPayload;
@@ -115,8 +117,12 @@ public class ClientHandler {
         boolean isZKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_Z) == GLFW.GLFW_PRESS;
         boolean isYKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_Y) == GLFW.GLFW_PRESS;
 
-        if (client.screen == null && hasItem && isCKey && !lastC) {
-            ClientItemHandler.openScreen(client.player.getMainHandItem());
+        if (client.screen == null && isCKey && !lastC) {
+            if (held.is(GraffitiMod.GRAFFITI_TOOL.get())) {
+                ClientItemHandler.openScreen(held);
+            } else if (held.is(GraffitiMod.BRUSH.get()) || held.is(GraffitiMod.WET_BRUSH.get())) {
+                Minecraft.getInstance().setScreen(new BrushScreen(held));
+            }
         }
         lastC = isCKey;
 
@@ -220,7 +226,10 @@ public class ClientHandler {
         lastPaintV = v;
 
         if (isBrush) {
-            PacketDistributor.sendToServer(new CleanPayload(pos, side, u, v, 3));
+            if (!client.player.isCreative() && held.is(GraffitiMod.WET_BRUSH.get()) && held.getDamageValue() >= held.getMaxDamage()) return;
+            int brushRad = BrushItem.getSize(held) - 1;
+            int shape = BrushItem.getShape(held);
+            PacketDistributor.sendToServer(new CleanPayload(pos, side, u, v, brushRad, shape));
 
             long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             var chunk = GraffitiRenderer.GRAFFITI_CACHE.get(ck);
@@ -230,9 +239,20 @@ public class ClientHandler {
                     int[][] grid = faces.get(side);
                     if (grid != null) {
                         int alphaReduction = held.is(GraffitiMod.WET_BRUSH.get()) ? 51 : 16;
-                        for (int du = -3; du <= 3; du++) {
-                            for (int dv = -3; dv <= 3; dv++) {
-                                if (du * du + dv * dv > 9) continue;
+                        for (int du = -brushRad; du <= brushRad; du++) {
+                            for (int dv = -brushRad; dv <= brushRad; dv++) {
+                                boolean inBounds = du >= -brushRad && du <= brushRad && dv >= -brushRad && dv <= brushRad;
+                                if (!inBounds) continue;
+                                boolean paint = switch (shape) {
+                                    case BrushItem.SHAPE_CIRCLE -> du * du + dv * dv <= brushRad * brushRad;
+                                    case BrushItem.SHAPE_ROUNDED -> {
+                                        int cr = Math.max(1, brushRad / 2);
+                                        if (Math.abs(du) <= brushRad - cr || Math.abs(dv) <= brushRad - cr) yield true;
+                                        yield (Math.abs(du) - (brushRad - cr)) * (Math.abs(du) - (brushRad - cr)) + (Math.abs(dv) - (brushRad - cr)) * (Math.abs(dv) - (brushRad - cr)) <= cr * cr;
+                                    }
+                                    default -> true;
+                                };
+                                if (!paint) continue;
                                 int tu = u + du, tv = v + dv;
                                 if (tu < 0 || tu >= 16 || tv < 0 || tv >= 16) continue;
                                 int color = grid[tu][tv];

@@ -1,6 +1,7 @@
 package its.vlxd.graffiti.network;
 
 import its.vlxd.graffiti.GraffitiMod;
+import its.vlxd.graffiti.item.BrushItem;
 import its.vlxd.graffiti.item.GraffitiItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -8,6 +9,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
@@ -253,6 +255,8 @@ public class Networking {
                 return;
             }
 
+            if (!player.isCreative() && held.is(GraffitiMod.WET_BRUSH.get()) && held.getDamageValue() >= held.getMaxDamage()) return;
+
             BlockPos pos = payload.pos();
             Direction side = payload.side();
             long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
@@ -267,11 +271,21 @@ public class Networking {
 
             GraffitiMod.saveSnapshot(ck, posL, side);
 
-            boolean changed = false;
             int radius = payload.radius();
+            int shape = payload.shape();
+            boolean changed = false;
             for (int du = -radius; du <= radius; du++) {
                 for (int dv = -radius; dv <= radius; dv++) {
-                    if (du * du + dv * dv > radius * radius) continue;
+                    boolean paint = switch (shape) {
+                        case BrushItem.SHAPE_CIRCLE -> du * du + dv * dv <= radius * radius;
+                        case BrushItem.SHAPE_ROUNDED -> {
+                            int cr = Math.max(1, radius / 2);
+                            if (Math.abs(du) <= radius - cr || Math.abs(dv) <= radius - cr) yield true;
+                            yield (Math.abs(du) - (radius - cr)) * (Math.abs(du) - (radius - cr)) + (Math.abs(dv) - (radius - cr)) * (Math.abs(dv) - (radius - cr)) <= cr * cr;
+                        }
+                        default -> true;
+                    };
+                    if (!paint) continue;
                     int tu = payload.u() + du;
                     int tv = payload.v() + dv;
                     if (tu < 0 || tu >= 16 || tv < 0 || tv >= 16) continue;
@@ -291,6 +305,19 @@ public class Networking {
             }
 
             if (changed) {
+                if (!player.isCreative()) {
+                    held.setDamageValue(held.getDamageValue() + 1);
+                    if (held.getDamageValue() >= held.getMaxDamage()) {
+                        if (held.is(GraffitiMod.WET_BRUSH.get())) {
+                            ItemStack dry = new ItemStack(GraffitiMod.BRUSH.get());
+                            BrushItem.setSize(dry, BrushItem.getSize(held));
+                            BrushItem.setShape(dry, BrushItem.getShape(held));
+                            player.setItemInHand(InteractionHand.MAIN_HAND, dry);
+                        }
+                        player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                                SoundEvents.ITEM_BREAK, SoundSource.PLAYERS, 1.0f, 1.0f);
+                    }
+                }
                 var level = player.getServer().getLevel(player.level().dimension());
                 if (level != null) {
                     tryPlaySound(player, level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
