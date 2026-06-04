@@ -8,6 +8,7 @@ import its.vlxd.graffiti.config.GraffitiConfig;
 import its.vlxd.graffiti.item.GraffitiItem;
 import its.vlxd.graffiti.network.FaceSyncPayload;
 import its.vlxd.graffiti.network.PaintPayload;
+import its.vlxd.graffiti.network.RemoveGraffitiPayload;
 import its.vlxd.graffiti.network.SnapshotPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
 import its.vlxd.graffiti.network.UndoPayload;
@@ -208,6 +209,12 @@ public class ClientHandler {
     public static void handlePaintPacket(PaintPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             GraffitiRenderer.addPixelToCache(payload);
+        });
+    }
+
+    public static void handleRemoveGraffiti(RemoveGraffitiPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            GraffitiRenderer.removeBlockFaces(payload.pos());
         });
     }
 

@@ -69,6 +69,20 @@ public class Networking {
                 FaceSyncPayload.CODEC,
                 (payload, context) -> dispatchClientFaceSync(payload, context)
         );
+
+        registrar.playToClient(
+                RemoveGraffitiPayload.TYPE,
+                RemoveGraffitiPayload.CODEC,
+                (payload, context) -> dispatchClientRemove(payload, context)
+        );
+    }
+
+    private static void dispatchClientRemove(RemoveGraffitiPayload payload, IPayloadContext context) {
+        try {
+            Class.forName("its.vlxd.graffiti.client.ClientHandler")
+                    .getMethod("handleRemoveGraffiti", RemoveGraffitiPayload.class, IPayloadContext.class)
+                    .invoke(null, payload, context);
+        } catch (Exception ignored) {}
     }
 
     private static void dispatchClientFaceSync(FaceSyncPayload payload, IPayloadContext context) {

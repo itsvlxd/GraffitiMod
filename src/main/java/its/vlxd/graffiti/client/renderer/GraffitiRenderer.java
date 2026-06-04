@@ -360,6 +360,36 @@ public class GraffitiRenderer {
         return chunk != null ? chunk.get(pos.asLong()) : null;
     }
 
+    public static void removeBlockFaces(BlockPos pos) {
+        long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
+        var chunk = GRAFFITI_CACHE.get(ck);
+        if (chunk != null) {
+            chunk.remove(pos.asLong());
+            if (chunk.isEmpty()) GRAFFITI_CACHE.remove(ck);
+            needsSave = true;
+        }
+    }
+
+    public static int[][] rotateGrid(int[][] grid, int rotations) {
+        if (rotations == 0 || grid == null) return grid;
+        int[][] result = new int[GRID_SIZE][GRID_SIZE];
+        for (int u = 0; u < GRID_SIZE; u++) {
+            for (int v = 0; v < GRID_SIZE; v++) {
+                int val = grid[u][v];
+                if (val == 0) continue;
+                int nu, nv;
+                switch ((rotations % 4 + 4) % 4) {
+                    case 1 -> { nu = GRID_SIZE - 1 - v; nv = u; }
+                    case 2 -> { nu = GRID_SIZE - 1 - u; nv = GRID_SIZE - 1 - v; }
+                    case 3 -> { nu = v; nv = GRID_SIZE - 1 - u; }
+                    default -> { nu = u; nv = v; }
+                }
+                result[nu][nv] = val;
+            }
+        }
+        return result;
+    }
+
     public static void addPixelToCache(PaintPayload p) {
         long ck = ChunkPos.asLong(p.pos().getX() >> 4, p.pos().getZ() >> 4);
         GRAFFITI_CACHE.computeIfAbsent(ck, k -> new HashMap<>())

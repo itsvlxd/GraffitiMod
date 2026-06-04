@@ -5,7 +5,10 @@ import its.vlxd.graffiti.network.ColorPayload;
 import its.vlxd.graffiti.network.FaceSyncPayload;
 import its.vlxd.graffiti.network.Networking;
 import its.vlxd.graffiti.network.PaintPayload;
+import its.vlxd.graffiti.network.RemoveGraffitiPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -21,6 +24,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -54,6 +58,7 @@ public class GraffitiMod {
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, List<int[][]>>>> UNDO_HISTORY = new HashMap<>();
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, Integer>>> LAST_PAINT_TICK = new HashMap<>();
     private static final int IDLE_TICKS = 20;
+    public static final Map<java.util.UUID, Map<Direction, int[][]>> PLAYER_CLIPBOARD = new HashMap<>();
 
     public GraffitiMod(IEventBus modBus) {
         TABS.register("graffiti_group", () -> CreativeModeTab.builder()
@@ -73,6 +78,8 @@ public class GraffitiMod {
         bus.addListener(this::onServerStopping);
         bus.addListener(this::onPlayerLogin);
         bus.addListener(this::onServerTick);
+        bus.addListener(this::onBlockBreak);
+        bus.addListener(this::onBlockPlace);
     }
 
     private void addToVanillaTabs(BuildCreativeModeTabContentsEvent event) {
@@ -337,6 +344,100 @@ public class GraffitiMod {
         LAST_PAINT_TICK.computeIfAbsent(ck, k -> new HashMap<>())
                 .computeIfAbsent(posL, k -> new EnumMap<>(net.minecraft.core.Direction.class))
                 .put(side, tick);
+    }
+
+    public static int[][] rotateGrid(int[][] grid, int rotations) {
+        if (rotations == 0 || grid == null) return grid;
+        int[][] result = new int[16][16];
+        for (int u = 0; u < 16; u++) {
+            for (int v = 0; v < 16; v++) {
+                int val = grid[u][v];
+                if (val == 0) continue;
+                int nu, nv;
+                switch ((rotations % 4 + 4) % 4) {
+                    case 1 -> { nu = 15 - v; nv = u; }
+                    case 2 -> { nu = 15 - u; nv = 15 - v; }
+                    case 3 -> { nu = v; nv = 15 - u; }
+                    default -> { nu = u; nv = v; }
+                }
+                result[nu][nv] = val;
+            }
+        }
+        return result;
+    }
+
+    private void onBlockBreak(BlockEvent.BreakEvent event) {
+        var player = event.getPlayer();
+        if (player == null) return;
+        BlockPos pos = event.getPos();
+
+        long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
+        long posL = pos.asLong();
+
+        var chunk = SERVER_CACHE.get(ck);
+        if (chunk == null) return;
+        var faces = chunk.get(posL);
+        if (faces == null || faces.isEmpty()) return;
+
+        Map<Direction, int[][]> clipboard = new EnumMap<>(Direction.class);
+        for (var entry : faces.entrySet()) {
+            int[][] copy = new int[16][16];
+            for (int u = 0; u < 16; u++) {
+                System.arraycopy(entry.getValue()[u], 0, copy[u], 0, 16);
+            }
+            clipboard.put(entry.getKey(), copy);
+        }
+        PLAYER_CLIPBOARD.put(player.getUUID(), clipboard);
+
+        chunk.remove(posL);
+        if (chunk.isEmpty()) SERVER_CACHE.remove(ck);
+
+        UNDO_HISTORY.remove(ck);
+
+        ServerLevel level = player.getServer() != null
+                ? player.getServer().getLevel(player.level().dimension()) : null;
+        if (level != null) {
+            var removal = new RemoveGraffitiPayload(pos);
+            for (var p : level.players()) {
+                PacketDistributor.sendToPlayer(p, removal);
+            }
+        }
+    }
+
+    private void onBlockPlace(BlockEvent.EntityPlaceEvent event) {
+        var entity = event.getEntity();
+        if (!(entity instanceof net.minecraft.world.entity.player.Player player)) return;
+
+        var clipboard = PLAYER_CLIPBOARD.remove(player.getUUID());
+        if (clipboard == null || clipboard.isEmpty()) return;
+
+        BlockPos pos = event.getPos();
+        Direction facing = player.getDirection();
+
+        int rotations = switch (facing) {
+            case EAST -> 1;
+            case SOUTH -> 2;
+            case WEST -> 3;
+            default -> 0;
+        };
+
+        long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
+        long posL = pos.asLong();
+
+        var targetFaces = SERVER_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
+                .computeIfAbsent(posL, k -> new EnumMap<>(Direction.class));
+
+        var level = player.getServer() != null
+                ? player.getServer().getLevel(player.level().dimension()) : null;
+
+        for (var entry : clipboard.entrySet()) {
+            int[][] rotated = rotateGrid(entry.getValue(), rotations);
+            targetFaces.put(entry.getKey(), rotated);
+
+            if (level != null) {
+                broadcastFace(pos, entry.getKey(), rotated, level);
+            }
+        }
     }
 
     public static void discardFutureHistory(long ck, long posL, net.minecraft.core.Direction side) {
