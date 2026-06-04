@@ -2,10 +2,14 @@ package its.vlxd.graffiti.network;
 
 import its.vlxd.graffiti.GraffitiMod;
 import its.vlxd.graffiti.item.GraffitiItem;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.handling.IPayloadHandler;
+
+import java.util.HashMap;
 
 public class Networking {
     public static void registerPayloadHandlers(RegisterPayloadHandlersEvent event) {
@@ -69,7 +73,10 @@ public class Networking {
             var player = context.player();
             if (player == null) return;
 
-            GraffitiMod.SERVER_CACHE.computeIfAbsent(payload.pos().asLong(), k -> new java.util.EnumMap<>(net.minecraft.core.Direction.class))
+            BlockPos pos = payload.pos();
+            long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
+            GraffitiMod.SERVER_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
+                    .computeIfAbsent(pos.asLong(), k -> new java.util.EnumMap<>(net.minecraft.core.Direction.class))
                     .computeIfAbsent(payload.side(), k -> new int[16][16])[payload.u()][payload.v()] = payload.color();
 
             for (var otherPlayer : player.getServer().getLevel(player.level().dimension()).players()) {

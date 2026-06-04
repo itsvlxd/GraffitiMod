@@ -14,6 +14,7 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -29,9 +30,10 @@ import java.util.zip.GZIPOutputStream;
 public class GraffitiRenderer {
     private static final int GRID_SIZE = 16;
     private static final float Z_FIGHT_BIAS = 0.005f;
+    private static final int SAVE_MAGIC = 0x47724166;
 
     public static final List<PaintPayload> PIXELS = Collections.synchronizedList(new ArrayList<>());
-    public static final Map<Long, Map<Direction, int[][]>> GRAFFITI_CACHE = new ConcurrentHashMap<>();
+    public static final Map<Long, Map<Long, Map<Direction, int[][]>>> GRAFFITI_CACHE = new ConcurrentHashMap<>();
 
     private static String lastWorldName = "";
     private static boolean needsSave = false;
@@ -53,7 +55,9 @@ public class GraffitiRenderer {
         synchronized (PIXELS) {
             if (!PIXELS.isEmpty()) {
                 for (PaintPayload p : PIXELS) {
-                    GRAFFITI_CACHE.computeIfAbsent(p.pos().asLong(), k -> new EnumMap<>(Direction.class))
+                    long ck = ChunkPos.asLong(p.pos().getX() >> 4, p.pos().getZ() >> 4);
+                    GRAFFITI_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
+                            .computeIfAbsent(p.pos().asLong(), k -> new EnumMap<>(Direction.class))
                             .computeIfAbsent(p.side(), k -> new int[GRID_SIZE][GRID_SIZE])[p.u()][p.v()] = p.color();
                 }
                 PIXELS.clear();
@@ -76,25 +80,40 @@ public class GraffitiRenderer {
         poseStack.pushPose();
         poseStack.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
 
-        Iterator<Map.Entry<Long, Map<Direction, int[][]>>> it = GRAFFITI_CACHE.entrySet().iterator();
-        while (it.hasNext()) {
-            var entry = it.next();
-            BlockPos pos = BlockPos.of(entry.getKey());
+        int chunkRadius = (GraffitiConfig.get().renderDistance >> 4) + 2;
+        ChunkPos cameraChunk = new ChunkPos(BlockPos.containing(cameraPos));
 
-            if (pos.distToCenterSqr(cameraPos) > maxDistSq) continue;
+        for (int cx = cameraChunk.x - chunkRadius; cx <= cameraChunk.x + chunkRadius; cx++) {
+            for (int cz = cameraChunk.z - chunkRadius; cz <= cameraChunk.z + chunkRadius; cz++) {
+                long ck = ChunkPos.asLong(cx, cz);
+                var chunk = GRAFFITI_CACHE.get(ck);
+                if (chunk == null || chunk.isEmpty()) continue;
 
-            if (GraffitiConfig.get().useCulling && frustum != null) {
-                if (!frustum.isVisible(new AABB(pos))) continue;
-            }
+                var blockIter = chunk.entrySet().iterator();
+                while (blockIter.hasNext()) {
+                    var blockEntry = blockIter.next();
+                    BlockPos pos = BlockPos.of(blockEntry.getKey());
 
-            if (world.getBlockState(pos).isAir()) {
-                it.remove();
-                needsSave = true;
-                continue;
-            }
+                    if (pos.distToCenterSqr(cameraPos) > maxDistSq) continue;
 
-            for (var sideEntry : entry.getValue().entrySet()) {
-                renderOptimizedFace(poseStack, buffer, pos, sideEntry.getKey(), sideEntry.getValue(), world);
+                    if (GraffitiConfig.get().useCulling && frustum != null) {
+                        if (!frustum.isVisible(new AABB(pos))) continue;
+                    }
+
+                    if (world.getBlockState(pos).isAir()) {
+                        blockIter.remove();
+                        needsSave = true;
+                        continue;
+                    }
+
+                    for (var sideEntry : blockEntry.getValue().entrySet()) {
+                        renderOptimizedFace(poseStack, buffer, pos, sideEntry.getKey(), sideEntry.getValue(), world);
+                    }
+                }
+
+                if (chunk.isEmpty()) {
+                    GRAFFITI_CACHE.remove(ck);
+                }
             }
         }
 
@@ -227,21 +246,37 @@ public class GraffitiRenderer {
         if (lastWorldName.isEmpty()) return;
         File file = getSaveFile();
         try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(new BufferedOutputStream(new FileOutputStream(file))))) {
-            List<long[]> data = new ArrayList<>();
-            GRAFFITI_CACHE.forEach((pos, sides) -> sides.forEach((side, grid) -> {
-                for (int u = 0; u < GRID_SIZE; u++) {
-                    for (int v = 0; v < GRID_SIZE; v++) {
-                        if (grid[u][v] != 0) data.add(new long[]{pos, side.get3DDataValue(), u, v, grid[u][v]});
+            out.writeInt(SAVE_MAGIC);
+            out.writeInt(GRAFFITI_CACHE.size());
+            for (var chunkEntry : GRAFFITI_CACHE.entrySet()) {
+                out.writeLong(chunkEntry.getKey());
+                var blocks = chunkEntry.getValue();
+                out.writeInt(blocks.size());
+                for (var blockEntry : blocks.entrySet()) {
+                    out.writeLong(blockEntry.getKey());
+                    var faces = blockEntry.getValue();
+                    out.writeInt(faces.size());
+                    for (var faceEntry : faces.entrySet()) {
+                        out.writeByte(faceEntry.getKey().get3DDataValue());
+                        int[][] grid = faceEntry.getValue();
+                        int pixelCount = 0;
+                        for (int u = 0; u < GRID_SIZE; u++) {
+                            for (int v = 0; v < GRID_SIZE; v++) {
+                                if (grid[u][v] != 0) pixelCount++;
+                            }
+                        }
+                        out.writeInt(pixelCount);
+                        for (int u = 0; u < GRID_SIZE; u++) {
+                            for (int v = 0; v < GRID_SIZE; v++) {
+                                if (grid[u][v] != 0) {
+                                    out.writeByte(u);
+                                    out.writeByte(v);
+                                    out.writeInt(grid[u][v]);
+                                }
+                            }
+                        }
                     }
                 }
-            }));
-            out.writeInt(data.size());
-            for (long[] p : data) {
-                out.writeLong(p[0]);
-                out.writeByte((int)p[1]);
-                out.writeByte((int)p[2]);
-                out.writeByte((int)p[3]);
-                out.writeInt((int)p[4]);
             }
         } catch (IOException e) {
             GraffitiMod.LOGGER.error("Failed to save graffiti cache", e);
@@ -253,17 +288,48 @@ public class GraffitiRenderer {
         GRAFFITI_CACHE.clear();
         if (!file.exists()) return;
         try (DataInputStream in = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(file))))) {
-            int count = in.readInt();
-            for (int i = 0; i < count; i++) {
-                long pos = in.readLong();
-                int sideId = in.readByte();
-                int u = in.readUnsignedByte();
-                int v = in.readUnsignedByte();
-                int color = in.readInt();
+            int magic = in.readInt();
+            if (magic == SAVE_MAGIC) {
+                int chunkCount = in.readInt();
+                for (int c = 0; c < chunkCount; c++) {
+                    long ck = in.readLong();
+                    int blockCount = in.readInt();
+                    var blocks = new HashMap<Long, Map<Direction, int[][]>>();
+                    for (int b = 0; b < blockCount; b++) {
+                        long pos = in.readLong();
+                        int faceCount = in.readInt();
+                        var faces = new EnumMap<Direction, int[][]>(Direction.class);
+                        for (int f = 0; f < faceCount; f++) {
+                            Direction side = Direction.from3DDataValue(in.readByte());
+                            int[][] grid = new int[GRID_SIZE][GRID_SIZE];
+                            int pixelCount = in.readInt();
+                            for (int p = 0; p < pixelCount; p++) {
+                                int u = in.readUnsignedByte();
+                                int v = in.readUnsignedByte();
+                                int color = in.readInt();
+                                if (u < GRID_SIZE && v < GRID_SIZE) grid[u][v] = color;
+                            }
+                            faces.put(side, grid);
+                        }
+                        blocks.put(pos, faces);
+                    }
+                    GRAFFITI_CACHE.put(ck, blocks);
+                }
+            } else {
+                int count = magic;
+                for (int i = 0; i < count; i++) {
+                    long pos = in.readLong();
+                    int sideId = in.readByte();
+                    int u = in.readUnsignedByte();
+                    int v = in.readUnsignedByte();
+                    int color = in.readInt();
 
-                if (u < GRID_SIZE && v < GRID_SIZE && sideId >= 0 && sideId < 6) {
-                    GRAFFITI_CACHE.computeIfAbsent(pos, k -> new EnumMap<>(Direction.class))
-                            .computeIfAbsent(Direction.from3DDataValue(sideId), k -> new int[GRID_SIZE][GRID_SIZE])[u][v] = color;
+                    if (u < GRID_SIZE && v < GRID_SIZE && sideId >= 0 && sideId < 6) {
+                        long ck = ChunkPos.asLong(BlockPos.of(pos).getX() >> 4, BlockPos.of(pos).getZ() >> 4);
+                        GRAFFITI_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
+                                .computeIfAbsent(pos, k -> new EnumMap<>(Direction.class))
+                                .computeIfAbsent(Direction.from3DDataValue(sideId), k -> new int[GRID_SIZE][GRID_SIZE])[u][v] = color;
+                    }
                 }
             }
         } catch (IOException e) {
@@ -289,8 +355,15 @@ public class GraffitiRenderer {
         return new File(dir, "cache.bin");
     }
 
+    public static Map<Direction, int[][]> getBlockFaces(BlockPos pos) {
+        var chunk = GRAFFITI_CACHE.get(ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4));
+        return chunk != null ? chunk.get(pos.asLong()) : null;
+    }
+
     public static void addPixelToCache(PaintPayload p) {
-        GRAFFITI_CACHE.computeIfAbsent(p.pos().asLong(), k -> new EnumMap<>(Direction.class))
+        long ck = ChunkPos.asLong(p.pos().getX() >> 4, p.pos().getZ() >> 4);
+        GRAFFITI_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
+                .computeIfAbsent(p.pos().asLong(), k -> new EnumMap<>(Direction.class))
                 .computeIfAbsent(p.side(), k -> new int[GRID_SIZE][GRID_SIZE])[p.u()][p.v()] = p.color();
         needsSave = true;
     }

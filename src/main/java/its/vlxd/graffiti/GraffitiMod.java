@@ -13,6 +13,7 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -37,6 +38,7 @@ import java.util.zip.GZIPOutputStream;
 public class GraffitiMod {
     public static final String MOD_ID = "graffiti";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    private static final int SAVE_MAGIC = 0x47724166;
 
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(Registries.ITEM, MOD_ID);
     public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
@@ -44,7 +46,7 @@ public class GraffitiMod {
     public static final DeferredHolder<Item, GraffitiItem> GRAFFITI_TOOL =
             ITEMS.register("graffiti_tool", () -> new GraffitiItem(new Item.Properties().stacksTo(1)));
 
-    public static final Map<Long, Map<net.minecraft.core.Direction, int[][]>> SERVER_CACHE = new HashMap<>();
+    public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, int[][]>>> SERVER_CACHE = new HashMap<>();
 
     public GraffitiMod(IEventBus modBus) {
         TABS.register("graffiti_group", () -> CreativeModeTab.builder()
@@ -77,17 +79,47 @@ public class GraffitiMod {
         if (!file.exists()) return;
 
         try (DataInputStream in = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(file))))) {
-            int count = in.readInt();
-            for (int i = 0; i < count; i++) {
-                long pos = in.readLong();
-                int sideId = in.readByte();
-                int u = in.readUnsignedByte();
-                int v = in.readUnsignedByte();
-                int color = in.readInt();
-
-                if (u >= 0 && u < 16 && v >= 0 && v < 16 && sideId >= 0 && sideId < 6) {
-                    SERVER_CACHE.computeIfAbsent(pos, k -> new EnumMap<>(net.minecraft.core.Direction.class))
-                            .computeIfAbsent(net.minecraft.core.Direction.from3DDataValue(sideId), k -> new int[16][16])[u][v] = color;
+            int magic = in.readInt();
+            if (magic == SAVE_MAGIC) {
+                int chunkCount = in.readInt();
+                for (int c = 0; c < chunkCount; c++) {
+                    long ck = in.readLong();
+                    int blockCount = in.readInt();
+                    var blocks = new HashMap<Long, Map<net.minecraft.core.Direction, int[][]>>();
+                    for (int b = 0; b < blockCount; b++) {
+                        long pos = in.readLong();
+                        int faceCount = in.readInt();
+                        var faces = new EnumMap<net.minecraft.core.Direction, int[][]>(net.minecraft.core.Direction.class);
+                        for (int f = 0; f < faceCount; f++) {
+                            var side = net.minecraft.core.Direction.from3DDataValue(in.readByte());
+                            int[][] grid = new int[16][16];
+                            int pixelCount = in.readInt();
+                            for (int p = 0; p < pixelCount; p++) {
+                                int u = in.readUnsignedByte();
+                                int v = in.readUnsignedByte();
+                                int color = in.readInt();
+                                if (u < 16 && v < 16) grid[u][v] = color;
+                            }
+                            faces.put(side, grid);
+                        }
+                        blocks.put(pos, faces);
+                    }
+                    SERVER_CACHE.put(ck, blocks);
+                }
+            } else {
+                int count = magic;
+                for (int i = 0; i < count; i++) {
+                    long pos = in.readLong();
+                    int sideId = in.readByte();
+                    int u = in.readUnsignedByte();
+                    int v = in.readUnsignedByte();
+                    int color = in.readInt();
+                    if (u < 16 && v < 16 && sideId >= 0 && sideId < 6) {
+                        long ck = ChunkPos.asLong(net.minecraft.core.BlockPos.of(pos).getX() >> 4, net.minecraft.core.BlockPos.of(pos).getZ() >> 4);
+                        SERVER_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
+                                .computeIfAbsent(pos, k -> new EnumMap<>(net.minecraft.core.Direction.class))
+                                .computeIfAbsent(net.minecraft.core.Direction.from3DDataValue(sideId), k -> new int[16][16])[u][v] = color;
+                    }
                 }
             }
         } catch (Exception e) {
@@ -98,24 +130,37 @@ public class GraffitiMod {
     private void onServerStopping(ServerStoppingEvent event) {
         File file = new File(event.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(), "graffiti.bin");
         try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(new BufferedOutputStream(new FileOutputStream(file))))) {
-            List<long[]> data = new ArrayList<>();
-            SERVER_CACHE.forEach((pos, sides) -> sides.forEach((side, grid) -> {
-                for (int u = 0; u < 16; u++) {
-                    for (int v = 0; v < 16; v++) {
-                        if (grid[u][v] != 0) {
-                            data.add(new long[]{pos, side.get3DDataValue(), u, v, grid[u][v]});
+            out.writeInt(SAVE_MAGIC);
+            out.writeInt(SERVER_CACHE.size());
+            for (var chunkEntry : SERVER_CACHE.entrySet()) {
+                out.writeLong(chunkEntry.getKey());
+                var blocks = chunkEntry.getValue();
+                out.writeInt(blocks.size());
+                for (var blockEntry : blocks.entrySet()) {
+                    out.writeLong(blockEntry.getKey());
+                    var faces = blockEntry.getValue();
+                    out.writeInt(faces.size());
+                    for (var faceEntry : faces.entrySet()) {
+                        out.writeByte(faceEntry.getKey().get3DDataValue());
+                        int[][] grid = faceEntry.getValue();
+                        int pixelCount = 0;
+                        for (int u = 0; u < 16; u++) {
+                            for (int v = 0; v < 16; v++) {
+                                if (grid[u][v] != 0) pixelCount++;
+                            }
+                        }
+                        out.writeInt(pixelCount);
+                        for (int u = 0; u < 16; u++) {
+                            for (int v = 0; v < 16; v++) {
+                                if (grid[u][v] != 0) {
+                                    out.writeByte(u);
+                                    out.writeByte(v);
+                                    out.writeInt(grid[u][v]);
+                                }
+                            }
                         }
                     }
                 }
-            }));
-
-            out.writeInt(data.size());
-            for (long[] p : data) {
-                out.writeLong(p[0]);
-                out.writeByte((int) p[1]);
-                out.writeByte((int) p[2]);
-                out.writeByte((int) p[3]);
-                out.writeInt((int) p[4]);
             }
             out.flush();
         } catch (Exception e) {
@@ -130,7 +175,7 @@ public class GraffitiMod {
 
         server.execute(() -> {
             List<PaintPayload> syncData = new ArrayList<>();
-            SERVER_CACHE.forEach((posL, sides) -> sides.forEach((side, grid) -> {
+            SERVER_CACHE.forEach((ck, blocks) -> blocks.forEach((posL, faces) -> faces.forEach((side, grid) -> {
                 for (int u = 0; u < 16; u++) {
                     for (int v = 0; v < 16; v++) {
                         if (grid[u][v] != 0) {
@@ -138,7 +183,7 @@ public class GraffitiMod {
                         }
                     }
                 }
-            }));
+            })));
 
             if (!syncData.isEmpty()) {
                 PacketDistributor.sendToPlayer((ServerPlayer) player, new SyncGraffitiPayload(syncData));

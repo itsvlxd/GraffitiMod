@@ -117,7 +117,7 @@ public class ClientItemHandler {
     }
 
     private static int getPixelAt(BlockPos pos, Direction side, int u, int v) {
-        var sides = GraffitiRenderer.GRAFFITI_CACHE.get(pos.asLong());
+        var sides = GraffitiRenderer.getBlockFaces(pos);
         if (sides != null) {
             int[][] grid = sides.get(side);
             if (grid != null) return grid[u][v];
