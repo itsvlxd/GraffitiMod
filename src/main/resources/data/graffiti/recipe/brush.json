@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "I",
+    "S",
+    "W"
+  ],
+  "key": {
+    "I": { "item": "minecraft:iron_ingot" },
+    "S": { "item": "minecraft:sponge" },
+    "W": { "item": "minecraft:blue_wool" }
+  },
+  "result": {
+    "id": "graffiti:brush",
+    "count": 1
+  }
+}

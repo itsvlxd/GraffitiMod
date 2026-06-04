@@ -4,6 +4,11 @@ import its.vlxd.graffiti.GraffitiMod;
 import its.vlxd.graffiti.item.GraffitiItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -11,8 +16,21 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.handling.IPayloadHandler;
 
 import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class Networking {
+    private static final Map<UUID, Integer> SOUND_COOLDOWN = new HashMap<>();
+    private static final int SOUND_INTERVAL = 5;
+
+    private static boolean tryPlaySound(Player player, ServerLevel level, double x, double y, double z, SoundEvent sound, float pitch) {
+        int tick = player.getServer().getTickCount();
+        Integer last = SOUND_COOLDOWN.get(player.getUUID());
+        if (last != null && tick - last < SOUND_INTERVAL) return false;
+        SOUND_COOLDOWN.put(player.getUUID(), tick);
+        level.playSound(null, x, y, z, sound, SoundSource.PLAYERS, 1.0f, pitch);
+        return true;
+    }
     public static void registerPayloadHandlers(RegisterPayloadHandlersEvent event) {
         var registrar = event.registrar(GraffitiMod.MOD_ID);
 
@@ -74,6 +92,12 @@ public class Networking {
                 RemoveGraffitiPayload.TYPE,
                 RemoveGraffitiPayload.CODEC,
                 (payload, context) -> dispatchClientRemove(payload, context)
+        );
+
+        registrar.playToServer(
+                CleanPayload.TYPE,
+                CleanPayload.CODEC,
+                (payload, context) -> handleCleanServer(payload, context)
         );
     }
 
@@ -168,11 +192,79 @@ public class Networking {
             var server = player.getServer();
             if (server != null) {
                 GraffitiMod.recordPaintTick(ck, posL, payload.side(), server.getTickCount());
+                var level = server.getLevel(player.level().dimension());
+                if (level != null) {
+                    tryPlaySound(player, level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                            SoundEvents.FIRECHARGE_USE, 1.5f);
+                }
             }
 
             for (var otherPlayer : player.getServer().getLevel(player.level().dimension()).players()) {
                 if (otherPlayer != player) {
                     net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(otherPlayer, payload);
+                }
+            }
+        });
+    }
+
+    private static void handleCleanServer(CleanPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            var player = context.player();
+            if (player == null || player.getServer() == null) return;
+
+            ItemStack held = player.getMainHandItem();
+            int alphaReduction;
+            if (held.is(GraffitiMod.WET_BRUSH.get())) {
+                alphaReduction = 128;
+            } else if (held.is(GraffitiMod.BRUSH.get())) {
+                alphaReduction = 32;
+            } else {
+                return;
+            }
+
+            BlockPos pos = payload.pos();
+            Direction side = payload.side();
+            long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
+            long posL = pos.asLong();
+
+            var chunk = GraffitiMod.SERVER_CACHE.get(ck);
+            if (chunk == null) return;
+            var faces = chunk.get(posL);
+            if (faces == null) return;
+            int[][] grid = faces.get(side);
+            if (grid == null) return;
+
+            GraffitiMod.saveSnapshot(ck, posL, side);
+
+            boolean changed = false;
+            int radius = payload.radius();
+            for (int du = -radius; du <= radius; du++) {
+                for (int dv = -radius; dv <= radius; dv++) {
+                    if (du * du + dv * dv > radius * radius) continue;
+                    int tu = payload.u() + du;
+                    int tv = payload.v() + dv;
+                    if (tu < 0 || tu >= 16 || tv < 0 || tv >= 16) continue;
+
+                    int color = grid[tu][tv];
+                    if (color == 0) continue;
+
+                    int alpha = (color >> 24) & 0xFF;
+                    alpha -= alphaReduction;
+                    if (alpha <= 0) {
+                        grid[tu][tv] = 0;
+                    } else {
+                        grid[tu][tv] = (alpha << 24) | (color & 0xFFFFFF);
+                    }
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                var level = player.getServer().getLevel(player.level().dimension());
+                if (level != null) {
+                    tryPlaySound(player, level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                            SoundEvents.BRUSH_GENERIC, 1.0f);
+                    GraffitiMod.broadcastFace(pos, side, grid, level);
                 }
             }
         });

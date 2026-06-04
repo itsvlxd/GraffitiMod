@@ -5,6 +5,7 @@ import its.vlxd.graffiti.client.gui.GraffitiHUD;
 import its.vlxd.graffiti.client.renderer.GraffitiRenderer;
 import its.vlxd.graffiti.config.GraffitiConfig;
 import its.vlxd.graffiti.item.GraffitiItem;
+import its.vlxd.graffiti.network.CleanPayload;
 import its.vlxd.graffiti.network.FaceSyncPayload;
 import its.vlxd.graffiti.network.PaintPayload;
 import its.vlxd.graffiti.network.RemoveGraffitiPayload;
@@ -17,6 +18,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -155,7 +157,10 @@ public class ClientHandler {
         if (client.player == null) return;
         if (client.screen != null) return;
 
-        if (!client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get())) return;
+        ItemStack held = client.player.getMainHandItem();
+        boolean isGraffitiTool = held.is(GraffitiMod.GRAFFITI_TOOL.get());
+        boolean isBrush = held.is(GraffitiMod.BRUSH.get()) || held.is(GraffitiMod.WET_BRUSH.get());
+        if (!isGraffitiTool && !isBrush) return;
 
         if (GLFW.glfwGetMouseButton(client.getWindow().getWindow(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) != GLFW.GLFW_PRESS) return;
         if (!(client.hitResult instanceof BlockHitResult hit)) return;
@@ -167,13 +172,40 @@ public class ClientHandler {
         int v = Math.min(15, Math.max(0, ClientItemHandler.getCoord(r, side, false)));
 
         if (pos.equals(lastPaintPos) && side == lastPaintSide && u == lastPaintU && v == lastPaintV) return;
-
         lastPaintPos = pos;
         lastPaintSide = side;
         lastPaintU = u;
         lastPaintV = v;
 
-        ClientItemHandler.handleAttack(hit);
+        if (isBrush) {
+            PacketDistributor.sendToServer(new CleanPayload(pos, side, u, v, 3));
+
+            long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
+            var chunk = GraffitiRenderer.GRAFFITI_CACHE.get(ck);
+            if (chunk != null) {
+                var faces = chunk.get(pos.asLong());
+                if (faces != null) {
+                    int[][] grid = faces.get(side);
+                    if (grid != null) {
+                        int alphaReduction = held.is(GraffitiMod.WET_BRUSH.get()) ? 128 : 32;
+                        for (int du = -3; du <= 3; du++) {
+                            for (int dv = -3; dv <= 3; dv++) {
+                                if (du * du + dv * dv > 9) continue;
+                                int tu = u + du, tv = v + dv;
+                                if (tu < 0 || tu >= 16 || tv < 0 || tv >= 16) continue;
+                                int color = grid[tu][tv];
+                                if (color == 0) continue;
+                                int alpha = (color >> 24) & 0xFF;
+                                alpha -= alphaReduction;
+                                grid[tu][tv] = alpha <= 0 ? 0 : (alpha << 24) | (color & 0xFFFFFF);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            ClientItemHandler.handleAttack(hit);
+        }
     }
 
     public static void onRenderGui(RenderGuiEvent.Post event) {

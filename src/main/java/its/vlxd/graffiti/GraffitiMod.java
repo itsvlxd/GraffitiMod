@@ -1,6 +1,7 @@
 package its.vlxd.graffiti;
 
 import its.vlxd.graffiti.item.GraffitiItem;
+import its.vlxd.graffiti.network.CleanPayload;
 import its.vlxd.graffiti.network.ColorPayload;
 import its.vlxd.graffiti.network.FaceSyncPayload;
 import its.vlxd.graffiti.network.Networking;
@@ -9,22 +10,29 @@ import its.vlxd.graffiti.network.RemoveGraffitiPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -56,6 +64,11 @@ public class GraffitiMod {
     public static final DeferredHolder<Item, GraffitiItem> GRAFFITI_TOOL =
             ITEMS.register("graffiti_tool", () -> new GraffitiItem(new Item.Properties().stacksTo(1)));
 
+    public static final DeferredHolder<Item, Item> BRUSH =
+            ITEMS.register("brush", () -> new Item(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<Item, Item> WET_BRUSH =
+            ITEMS.register("wet_brush", () -> new Item(new Item.Properties().stacksTo(1)));
+
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, int[][]>>> SERVER_CACHE = new HashMap<>();
 
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, List<int[][]>>>> UNDO_HISTORY = new HashMap<>();
@@ -64,12 +77,17 @@ public class GraffitiMod {
     public static final Map<java.util.UUID, Deque<Map<Direction, int[][]>>> PLAYER_CLIPBOARD = new HashMap<>();
     private static final long DESATURATION_INTERVAL = 120_000L; // 5 in-game days
     private long lastDesatTick = 0;
+    private static final Map<UUID, Integer> SUBMERGED_BRUSHES = new HashMap<>();
 
     public GraffitiMod(IEventBus modBus) {
         TABS.register("graffiti_group", () -> CreativeModeTab.builder()
                 .icon(() -> new ItemStack(GRAFFITI_TOOL.get()))
                 .title(Component.translatable("itemGroup.graffiti.group"))
-                .displayItems((params, output) -> output.accept(GRAFFITI_TOOL.get()))
+                .displayItems((params, output) -> {
+                    output.accept(GRAFFITI_TOOL.get());
+                    output.accept(BRUSH.get());
+                    output.accept(WET_BRUSH.get());
+                })
                 .build());
 
         ITEMS.register(modBus);
@@ -85,11 +103,14 @@ public class GraffitiMod {
         bus.addListener(this::onServerTick);
         bus.addListener(this::onBlockBreak);
         bus.addListener(this::onBlockPlace);
+        bus.addListener(this::onEntityJoinLevel);
     }
 
     private void addToVanillaTabs(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(GRAFFITI_TOOL.get());
+            event.accept(BRUSH.get());
+            event.accept(WET_BRUSH.get());
         }
     }
 
@@ -246,6 +267,40 @@ public class GraffitiMod {
         if (dayTime - lastDesatTick >= DESATURATION_INTERVAL) {
             desaturateAll(event.getServer().overworld());
             lastDesatTick += DESATURATION_INTERVAL;
+        }
+
+        if (!SUBMERGED_BRUSHES.isEmpty()) {
+            var it = SUBMERGED_BRUSHES.entrySet().iterator();
+            while (it.hasNext()) {
+                var entry = it.next();
+                Entity entity = null;
+                for (ServerLevel sl : event.getServer().getAllLevels()) {
+                    entity = sl.getEntity(entry.getKey());
+                    if (entity != null) break;
+                }
+                if (!(entity instanceof ItemEntity ie) || !ie.isAlive()) {
+                    it.remove();
+                    continue;
+                }
+                if (!ie.isInWater()) {
+                    if (entry.getValue() != -1) it.remove();
+                    continue;
+                }
+                if (entry.getValue() == -1) {
+                    entry.setValue(currentTick);
+                } else if (currentTick - entry.getValue() >= 40) {
+                    ie.setItem(new ItemStack(WET_BRUSH.get()));
+                    ((ServerLevel) ie.level()).sendParticles(
+                            ParticleTypes.BUBBLE, ie.getX(), ie.getY() + 0.5, ie.getZ(),
+                            12, 0.3, 0.3, 0.3, 0.05
+                    );
+                    ((ServerLevel) ie.level()).playSound(
+                            null, ie.getX(), ie.getY() + 0.5, ie.getZ(),
+                            SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0f, 1.5f
+                    );
+                    it.remove();
+                }
+            }
         }
     }
 
@@ -536,6 +591,12 @@ public class GraffitiMod {
             if (level != null) {
                 broadcastFace(pos, newFace, entry.getValue(), level);
             }
+        }
+    }
+
+    private void onEntityJoinLevel(EntityJoinLevelEvent event) {
+        if (event.getEntity() instanceof ItemEntity ie && ie.getItem().is(BRUSH.get())) {
+            SUBMERGED_BRUSHES.put(ie.getUUID(), -1);
         }
     }
 

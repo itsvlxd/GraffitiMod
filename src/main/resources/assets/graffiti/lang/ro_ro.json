@@ -1,5 +1,7 @@
 {
   "item.graffiti.graffiti_tool": "Vopsea spray",
+  "item.graffiti.brush": "Perie",
+  "item.graffiti.wet_brush": "Perie udă",
   "tooltip.graffiti.color_hex": "Culoare HEX",
   "screen.graffiti.title": "Editor Graffiti",
   "screen.graffiti.hex_label": "Culoare HEX",
@@ -17,5 +19,7 @@
   "option.graffiti.culling": "Optimizare (Culling)",
   "tooltip.graffiti.culling": "Ascunde graffiti-ul care nu este în câmpul vizual pentru a îmbunătăți FPS-ul.",
   "option.graffiti.distance": "Distanță de randare",
-  "jei.graffiti.description": "Pictați cu spray pe orice suprafață!\n\n§7Click dreapta§r pe o suprafață pentru a picta (neted, fără întârziere).\nApăsați §7C§r pentru a deschide editorul de culori (HSB, HEX, dimensiune pensulă).\nȚineți §7Ctrl§r + §7scroll§r sau §7săgeți§r pentru a schimba uneltele: Creion, Radieră, Umplere, Pipetă.\n\nGraffiti-ul se sincronizează între jucători și se salvează pe disc."
+  "jei.graffiti.description": "Pictați cu spray pe orice suprafață!\n\n§7Click dreapta§r pe o suprafață pentru a picta (neted, fără întârziere).\nApăsați §7C§r pentru a deschide editorul de culori (HSB, HEX, dimensiune pensulă).\nȚineți §7Ctrl§r + §7scroll§r sau §7săgeți§r pentru a schimba uneltele: Creion, Radieră, Umplere, Pipetă.\n\nGraffiti-ul se sincronizează între jucători și se salvează pe disc.",
+  "jei.graffiti.brush.description": "Curățați graffiti-ul de pe suprafețe!\n\n§7Click dreapta§r pe graffiti cu peria pentru a curăța o zonă §7circulară de 6×6 pixeli§r.\nEste nevoie de §78 mișcări§r pentru a elimina complet un pixel.\n\n§6Perie Udă:§r Aruncați peria în apă pentru §72 secunde§r pentru a o transforma în Perie Udă (curăță în §72 mișcări§r).\nPuteți crea o Perie Udă combinând cu o Găleată cu Apă.\nTopiți o Perie Udă în cuptor pentru a o usca înapoi în Perie normală.",
+  "jei.graffiti.wet_brush.description": "Un detergent eficient de graffiti!\n\n§7Click dreapta§r pe graffiti pentru a curăța o zonă §7circulară de 6×6 pixeli§r în doar §72 mișcări§r.\n\n§6Obținere:§r\n• Aruncați o §7Perie§r în apă pentru §72 secunde§r\n• Creați o Perie cu o Găleată cu Apă\n\n§6Uscare:§r Topiți în cuptor pentru a reveni la o Perie normală.\n\nNu poate fi folosită pentru arheologie."
 }

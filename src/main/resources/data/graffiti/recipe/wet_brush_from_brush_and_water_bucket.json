@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "graffiti:brush" },
+    { "item": "minecraft:water_bucket" }
+  ],
+  "result": {
+    "id": "graffiti:wet_brush",
+    "count": 1
+  }
+}

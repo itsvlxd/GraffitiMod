@@ -32,8 +32,21 @@ public class GraffitiJeiPlugin implements IModPlugin {
                 Component.translatable("jei.graffiti.description")
         );
 
+        registration.addIngredientInfo(
+                new ItemStack(GraffitiMod.BRUSH.get()),
+                VanillaTypes.ITEM_STACK,
+                Component.translatable("jei.graffiti.brush.description")
+        );
+
+        registration.addIngredientInfo(
+                new ItemStack(GraffitiMod.WET_BRUSH.get()),
+                VanillaTypes.ITEM_STACK,
+                Component.translatable("jei.graffiti.wet_brush.description")
+        );
+
         var factory = registration.getVanillaRecipeFactory();
-        var recipe = factory.createShapedRecipeBuilder(
+
+        var sprayRecipe = factory.createShapedRecipeBuilder(
                         CraftingBookCategory.MISC,
                         List.of(new ItemStack(GraffitiMod.GRAFFITI_TOOL.get()))
                 )
@@ -49,7 +62,24 @@ public class GraffitiJeiPlugin implements IModPlugin {
 
         registration.addRecipes(
                 RecipeTypes.CRAFTING,
-                List.of(new RecipeHolder<>(ResourceLocation.parse("graffiti:crafting"), recipe))
+                List.of(new RecipeHolder<>(ResourceLocation.parse("graffiti:crafting"), sprayRecipe))
+        );
+
+        var brushRecipe = factory.createShapedRecipeBuilder(
+                        CraftingBookCategory.MISC,
+                        List.of(new ItemStack(GraffitiMod.BRUSH.get()))
+                )
+                .define('I', Ingredient.of(Items.IRON_INGOT))
+                .define('S', Ingredient.of(Items.SPONGE))
+                .define('W', Ingredient.of(Items.BLUE_WOOL))
+                .pattern("I")
+                .pattern("S")
+                .pattern("W")
+                .build();
+
+        registration.addRecipes(
+                RecipeTypes.CRAFTING,
+                List.of(new RecipeHolder<>(ResourceLocation.parse("graffiti:brush_crafting"), brushRecipe))
         );
     }
 
