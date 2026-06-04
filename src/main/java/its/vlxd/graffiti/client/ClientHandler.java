@@ -8,9 +8,11 @@ import its.vlxd.graffiti.config.GraffitiConfig;
 import its.vlxd.graffiti.item.GraffitiItem;
 import its.vlxd.graffiti.network.PaintPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -36,6 +38,8 @@ public class ClientHandler {
     private static Direction lastPaintSide = null;
     private static int lastPaintU = -1;
     private static int lastPaintV = -1;
+
+
 
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
@@ -85,6 +89,19 @@ public class ClientHandler {
             ClientItemHandler.openScreen(client.player.getMainHandItem());
         }
         lastC = isCKey;
+
+        if (hasItem) {
+            int color = GraffitiItem.getColor(client.player.getMainHandItem());
+            String hex = String.format("#%06X", color & 0xFFFFFF);
+
+            Component msg = Component.literal("Color: ")
+                    .withStyle(ChatFormatting.GRAY)
+                    .append(Component.literal(hex).withStyle(s -> s.withColor(color & 0xFFFFFF)))
+                    .append(Component.literal("  Mode: ").withStyle(ChatFormatting.GRAY))
+                    .append(GraffitiHUD.getColoredToolName());
+
+            client.player.displayClientMessage(msg, true);
+        }
     }
 
     public static void onRenderFrame(RenderFrameEvent.Pre event) {

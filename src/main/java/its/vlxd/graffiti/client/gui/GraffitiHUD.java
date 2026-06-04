@@ -31,6 +31,12 @@ public class GraffitiHUD {
     };
 
     private static final String[] ICONS = {"✎", "✕", "█", "✀"};
+    private static final int[] MODE_COLORS = {
+            0xFFFFFF,
+            0xFF6655,
+            0x55FF55,
+            0xFFDD44
+    };
 
     public static void init() {
     }
@@ -76,6 +82,11 @@ public class GraffitiHUD {
         if (client.player != null) {
             client.player.playSound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_HAT.value(), 0.4f, 1.8f);
         }
+    }
+
+    public static Component getColoredToolName() {
+        return Component.literal(TOOL_NAMES[selectedIndex].getString())
+                .withStyle(s -> s.withColor(MODE_COLORS[selectedIndex]));
     }
 
     public static void playClickSound(Minecraft client) {

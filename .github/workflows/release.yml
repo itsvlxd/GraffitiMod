@@ -118,10 +118,6 @@ jobs:
           1. Install NeoForge 21.1.1+ for Minecraft 1.21.1
           2. Place the JAR in your \`mods/\` folder
 
-          > **Note:** This is a NeoForge mod. Remove any old Fabric versions before installing.
-
-          ---
-
           ${{ steps.semantic.outputs.new_release_notes }}
           RELEASE_EOF
 
