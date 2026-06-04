@@ -65,7 +65,7 @@ public class GraffitiMod {
     public static final DeferredRegister<SoundEvent> SOUND_EVENTS = DeferredRegister.create(Registries.SOUND_EVENT, MOD_ID);
 
     public static final DeferredHolder<Item, GraffitiItem> GRAFFITI_TOOL =
-            ITEMS.register("graffiti_tool", () -> new GraffitiItem(new Item.Properties().stacksTo(1)));
+            ITEMS.register("graffiti_tool", () -> new GraffitiItem(new Item.Properties().stacksTo(1).durability(12800)));
 
     public static final DeferredHolder<Item, Item> BRUSH =
             ITEMS.register("brush", () -> new Item(new Item.Properties().stacksTo(1)));
@@ -115,6 +115,7 @@ public class GraffitiMod {
         bus.addListener(this::onBlockBreak);
         bus.addListener(this::onBlockPlace);
         bus.addListener(this::onEntityJoinLevel);
+        bus.addListener(this::onItemCrafted);
     }
 
     private void addToVanillaTabs(BuildCreativeModeTabContentsEvent event) {
@@ -446,7 +447,7 @@ public class GraffitiMod {
                     float[] hsb = new float[3];
                     Color.RGBtoHSB(r, g, b, hsb);
                     float reduction = 0.02f + rng.nextFloat() * 0.13f;
-                    float floor = Math.min(hsb[1], 0.80f);
+                    float floor = Math.min(hsb[1], 0.85f);
                     hsb[1] *= (1.0f - reduction);
                     if (hsb[1] < floor) hsb[1] = floor;
                     int rgb = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
@@ -623,6 +624,49 @@ public class GraffitiMod {
     private void onEntityJoinLevel(EntityJoinLevelEvent event) {
         if (event.getEntity() instanceof ItemEntity ie && ie.getItem().is(BRUSH.get())) {
             SUBMERGED_BRUSHES.put(ie.getUUID(), -1);
+        }
+    }
+
+    private void onItemCrafted(PlayerEvent.ItemCraftedEvent event) {
+        ItemStack result = event.getCrafting();
+        if (!result.is(GRAFFITI_TOOL.get())) return;
+
+        // Copy settings from input can
+        for (int i = 0; i < event.getInventory().getContainerSize(); i++) {
+            ItemStack input = event.getInventory().getItem(i);
+            if (input.is(GRAFFITI_TOOL.get())) {
+                int inputColor = GraffitiItem.getColor(input);
+                int inputSize = GraffitiItem.getBrushSize(input);
+                int inputShape = GraffitiItem.getBrushShape(input);
+                boolean inputLocked = GraffitiItem.isColorLocked(input);
+                ItemStack finalResult = event.getCrafting();
+
+                // Apply to result immediately
+                GraffitiItem.setColor(finalResult, inputColor);
+                GraffitiItem.setBrushSize(finalResult, inputSize);
+                GraffitiItem.setBrushShape(finalResult, inputShape);
+                if (inputLocked) GraffitiItem.setColorLocked(finalResult, true);
+                finalResult.setDamageValue(0);
+
+                // Also schedule an inventory update to ensure it sticks
+                var player = event.getEntity();
+                if (player instanceof ServerPlayer sp) {
+                    sp.getServer().execute(() -> {
+                        for (int s = 0; s < sp.getInventory().getContainerSize(); s++) {
+                            ItemStack inv = sp.getInventory().getItem(s);
+                            if (inv.is(GRAFFITI_TOOL.get()) && inv.getDamageValue() == 0 && inv.getCount() == 1) {
+                                GraffitiItem.setColor(inv, inputColor);
+                                GraffitiItem.setBrushSize(inv, inputSize);
+                                GraffitiItem.setBrushShape(inv, inputShape);
+                                if (inputLocked) GraffitiItem.setColorLocked(inv, true);
+                                inv.setDamageValue(0);
+                                break;
+                            }
+                        }
+                    });
+                }
+                break;
+            }
         }
     }
 

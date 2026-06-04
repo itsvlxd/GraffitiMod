@@ -200,10 +200,28 @@ public class Networking {
             BlockPos pos = payload.pos();
             long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             long posL = pos.asLong();
-            GraffitiMod.SERVER_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
-                    .computeIfAbsent(posL, k -> new java.util.EnumMap<>(net.minecraft.core.Direction.class))
-                    .computeIfAbsent(payload.side(), k -> new int[16][16])[payload.u()][payload.v()] = payload.color();
 
+            var chunk = GraffitiMod.SERVER_CACHE
+                    .computeIfAbsent(ck, k -> new HashMap<>());
+            var faces = chunk
+                    .computeIfAbsent(posL, k -> new java.util.EnumMap<>(net.minecraft.core.Direction.class));
+            int[][] grid = faces
+                    .computeIfAbsent(payload.side(), k -> new int[16][16]);
+
+            int currentColor = grid[payload.u()][payload.v()];
+            boolean sameColor = currentColor == payload.color();
+            ItemStack held = player.getMainHandItem();
+
+            if (!sameColor && !player.isCreative() && held.is(GraffitiMod.GRAFFITI_TOOL.get())) {
+                if (held.getDamageValue() >= held.getMaxDamage()) return;
+                held.setDamageValue(held.getDamageValue() + 1);
+                if (held.getDamageValue() >= held.getMaxDamage()) {
+                    player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                            net.minecraft.sounds.SoundEvents.ITEM_BREAK, net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+                }
+            }
+
+            grid[payload.u()][payload.v()] = payload.color();
             GraffitiMod.discardFutureHistory(ck, posL, payload.side());
 
             var server = player.getServer();

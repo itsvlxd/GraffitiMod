@@ -85,6 +85,9 @@ public class GraffitiItem extends Item {
                 .append(Component.literal(hexString).withStyle(net.minecraft.ChatFormatting.GRAY)));
         tooltip.add(Component.literal("Size: " + getBrushSize(stack) + " Shape: " + getShapeName(getBrushShape(stack)))
                 .withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        int remaining = stack.getMaxDamage() - stack.getDamageValue();
+        tooltip.add(Component.literal("Paint: " + remaining + "/" + stack.getMaxDamage())
+                .withStyle(net.minecraft.ChatFormatting.GRAY));
         if (isColorLocked(stack)) {
             tooltip.add(Component.literal("Color Locked").withStyle(net.minecraft.ChatFormatting.RED));
         }

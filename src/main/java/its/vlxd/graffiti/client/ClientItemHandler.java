@@ -1,5 +1,6 @@
 package its.vlxd.graffiti.client;
 
+import its.vlxd.graffiti.GraffitiMod;
 import its.vlxd.graffiti.client.gui.GraffitiHUD;
 import its.vlxd.graffiti.client.gui.GraffitiScreen;
 import its.vlxd.graffiti.client.renderer.GraffitiRenderer;
@@ -212,6 +213,16 @@ public class ClientItemHandler {
     }
 
     private static void setPixel(BlockPos pos, Direction side, int u, int v, int color) {
+        var client = Minecraft.getInstance();
+        if (client.player == null) return;
+
+        ItemStack held = client.player.getMainHandItem();
+        if (!client.player.isCreative() && held.is(GraffitiMod.GRAFFITI_TOOL.get())) {
+            if (held.getDamageValue() >= held.getMaxDamage()) return;
+        }
+
+        if (getPixelAt(pos, side, u, v) == color) return;
+
         PaintPayload p = new PaintPayload(pos, side, u, v, color, 1);
         GraffitiRenderer.addPixelToCache(p);
         PacketDistributor.sendToServer(p);

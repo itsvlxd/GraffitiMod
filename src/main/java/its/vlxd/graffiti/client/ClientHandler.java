@@ -105,7 +105,7 @@ public class ClientHandler {
         if (client.player == null) return;
 
         ItemStack held = client.player.getMainHandItem();
-        if (!ItemStack.matches(held, lastHeldItem)) {
+        if (held.getItem() != lastHeldItem.getItem()) {
             if (held.is(GraffitiMod.GRAFFITI_TOOL.get())) {
                 PacketDistributor.sendToServer(new SprayEquipPayload());
             }
@@ -117,7 +117,7 @@ public class ClientHandler {
         boolean isZKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_Z) == GLFW.GLFW_PRESS;
         boolean isYKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_Y) == GLFW.GLFW_PRESS;
 
-        if (hasItem && isCKey && !lastC) {
+        if (client.screen == null && hasItem && isCKey && !lastC) {
             ClientItemHandler.openScreen(client.player.getMainHandItem());
         }
         lastC = isCKey;
@@ -187,6 +187,10 @@ public class ClientHandler {
         boolean rightDown = GLFW.glfwGetMouseButton(client.getWindow().getWindow(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
 
         if (isGraffitiTool && rightDown && !lastRightDown && client.hitResult instanceof BlockHitResult hit) {
+            if (!client.player.isCreative() && held.getDamageValue() >= held.getMaxDamage()) {
+                lastRightDown = rightDown;
+                return;
+            }
             BlockPos pos = hit.getBlockPos();
             paintLoop = new SpraySoundInstance(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
             client.getSoundManager().play(paintLoop);
