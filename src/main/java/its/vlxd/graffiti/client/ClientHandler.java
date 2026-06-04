@@ -22,7 +22,6 @@ import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 @EventBusSubscriber(modid = GraffitiMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
@@ -41,23 +40,6 @@ public class ClientHandler {
 
         ClientPlayConnection.JOIN.register(() -> clearClientCache());
         ClientPlayConnection.DISCONNECT.register(() -> clearClientCache());
-    }
-
-    @SubscribeEvent
-    public static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar(GraffitiMod.MOD_ID);
-
-        registrar.playToClient(
-                PaintPayload.TYPE,
-                PaintPayload.CODEC,
-                (payload, context) -> handlePaintPacket(payload, context)
-        );
-
-        registrar.playToClient(
-                SyncGraffitiPayload.TYPE,
-                SyncGraffitiPayload.CODEC,
-                (payload, context) -> handleSyncPacket(payload, context)
-        );
     }
 
     @SubscribeEvent
