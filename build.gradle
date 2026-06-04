@@ -1,0 +1,54 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '1.0.7'
+}
+
+version = project.mod_version
+
+base {
+    archivesName = project.archives_base_name
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+        }
+        server {
+            server()
+        }
+    }
+
+    mods {
+        graffiti {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+processResources {
+    def props = [
+            version: version,
+            neo_version: neo_version,
+            mc_version: mc_version
+    ]
+    inputs.properties props
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand props
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.release = 21
+}
+
+jar {
+    from('LICENSE') {
+        rename { "${it}_${archivesBaseName}" }
+    }
+}

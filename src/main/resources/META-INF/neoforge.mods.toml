@@ -1,0 +1,25 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "GPL-3.0"
+
+[[mods]]
+modId = "graffiti"
+version = "${version}"
+displayName = "Graffiti Mod"
+logoFile = "assets/graffiti/icon.png"
+authors = "itsvlxd"
+description = "A creative mod that allows players to paint on any block surface with customizable colors and tools."
+
+[[dependencies.graffiti]]
+    modId = "minecraft"
+    type = "required"
+    versionRange = "[1.21,1.22)"
+    ordering = "NONE"
+    side = "BOTH"
+
+[[dependencies.graffiti]]
+    modId = "neoforge"
+    type = "required"
+    versionRange = "[21,)"
+    ordering = "NONE"
+    side = "BOTH"

@@ -1,0 +1,20 @@
+{
+  "item.graffiti.graffiti_tool": "Vopsea spray",
+  "tooltip.graffiti.color_hex": "Culoare HEX",
+  "screen.graffiti.title": "Editor Graffiti",
+  "screen.graffiti.hex_label": "Culoare HEX",
+  "screen.graffiti.size_label": "Dimensiune",
+  "screen.graffiti.hex_alpha": "HEX / Alfa",
+  "screen.graffiti.brush_size": "Dimensiune pensulă",
+  "hud.graffiti.tool.pencil": "Creion",
+  "hud.graffiti.tool.eraser": "Radieră",
+  "hud.graffiti.tool.fill": "Umplere",
+  "hud.graffiti.tool.picker": "Pipetă",
+  "itemGroup.graffiti.group": "Graffiti",
+  "title.graffiti.config": "Setări Graffiti",
+  "category.graffiti.general": "Setări generale",
+  "option.graffiti.enabled": "Activează redarea graffiti",
+  "option.graffiti.culling": "Optimizare (Culling)",
+  "tooltip.graffiti.culling": "Ascunde graffiti-ul care nu este în câmpul vizual pentru a îmbunătăți FPS-ul.",
+  "option.graffiti.distance": "Distanță de randare"
+}
