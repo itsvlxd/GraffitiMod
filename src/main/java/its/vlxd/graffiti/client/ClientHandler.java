@@ -3,7 +3,6 @@ package its.vlxd.graffiti.client;
 import its.vlxd.graffiti.GraffitiMod;
 import its.vlxd.graffiti.client.gui.GraffitiHUD;
 import its.vlxd.graffiti.client.renderer.GraffitiRenderer;
-import its.vlxd.graffiti.client.renderer.PixelOutlineRenderer;
 import its.vlxd.graffiti.config.GraffitiConfig;
 import its.vlxd.graffiti.item.GraffitiItem;
 import its.vlxd.graffiti.network.FaceSyncPayload;
@@ -87,8 +86,6 @@ public class ClientHandler {
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             GraffitiRenderer.render(event);
-        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
-            PixelOutlineRenderer.render(event);
         }
     }
 

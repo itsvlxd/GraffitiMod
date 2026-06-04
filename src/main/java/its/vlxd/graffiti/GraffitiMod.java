@@ -60,7 +60,7 @@ public class GraffitiMod {
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, List<int[][]>>>> UNDO_HISTORY = new HashMap<>();
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, Integer>>> LAST_PAINT_TICK = new HashMap<>();
     private static final int IDLE_TICKS = 20;
-    public static final Map<java.util.UUID, Map<Direction, int[][]>> PLAYER_CLIPBOARD = new HashMap<>();
+    public static final Map<java.util.UUID, Deque<Map<Direction, int[][]>>> PLAYER_CLIPBOARD = new HashMap<>();
 
     public GraffitiMod(IEventBus modBus) {
         TABS.register("graffiti_group", () -> CreativeModeTab.builder()
@@ -430,7 +430,7 @@ public class GraffitiMod {
             }
             clipboard.put(normalizedFace, copy);
         }
-        PLAYER_CLIPBOARD.put(player.getUUID(), clipboard);
+        PLAYER_CLIPBOARD.computeIfAbsent(player.getUUID(), k -> new ArrayDeque<>()).addLast(clipboard);
 
         chunk.remove(posL);
         if (chunk.isEmpty()) SERVER_CACHE.remove(ck);
@@ -451,7 +451,10 @@ public class GraffitiMod {
         var entity = event.getEntity();
         if (!(entity instanceof net.minecraft.world.entity.player.Player player)) return;
 
-        var clipboard = PLAYER_CLIPBOARD.remove(player.getUUID());
+        var deque = PLAYER_CLIPBOARD.get(player.getUUID());
+        if (deque == null || deque.isEmpty()) return;
+        var clipboard = deque.pollFirst();
+        if (deque.isEmpty()) PLAYER_CLIPBOARD.remove(player.getUUID());
         if (clipboard == null || clipboard.isEmpty()) return;
 
         BlockPos pos = event.getPos();
