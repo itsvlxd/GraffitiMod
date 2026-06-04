@@ -1,11 +1,12 @@
 package its.vlxd.graffiti.client.gui;
 
 import its.vlxd.graffiti.item.GraffitiItem;
-import its.vlxd.graffiti.client.renderer.GraffitiRenderer;
 import its.vlxd.graffiti.network.ColorPayload;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
@@ -16,60 +17,94 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import java.awt.Color;
 
 public class GraffitiScreen extends Screen {
-    private static final int PALETTE_SIZE = 100;
+    private static final int PS = 100;
+    private static final int W = 260, H = 185;
 
     private final ItemStack stack;
     private int px, py;
     private float hue, saturation, brightness, alpha;
-    private EditBox hexField, sizeField;
+    private int brushSize, brushShape;
+    private EditBox hexField;
+    private Button sizeDown, sizeUp, shapeBtn;
+    private boolean hasPendingColorPacket = false;
 
     private DynamicTexture paletteTexture;
     private ResourceLocation textureId;
 
+    private static final int[] SIZES = {1, 2, 3, 4, 5, 6, 7, 8};
+    private static final String[] SHAPES = {"Square", "Circle", "Rounded", "Cloud", "Leaky"};
+
     public GraffitiScreen(ItemStack stack) {
-        super(Component.translatable("screen.graffiti.title"));
+        super(Component.literal("Graffiti Editor"));
         this.stack = stack;
     }
 
-    @Override
-    public boolean isPauseScreen() { return false; }
-
-    @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {}
+    @Override 
+    public boolean isPauseScreen() { 
+        return false; 
+    }
+    
+    @Override 
+    public void renderBackground(GuiGraphics ctx, int mx, int my, float dt) {}
 
     @Override
     protected void init() {
-        this.px = width / 2 - 120;
-        this.py = height / 2 - 70;
+        px = (width - W) / 2; 
+        py = (height - H) / 2;
 
-        int itemColor = GraffitiItem.getColor(stack);
+        int ic = GraffitiItem.getColor(stack);
+        float[] hsb = Color.RGBtoHSB((ic >> 16) & 0xFF, (ic >> 8) & 0xFF, ic & 0xFF, null);
+        hue = hsb[0]; 
+        saturation = hsb[1]; 
+        brightness = hsb[2]; 
+        alpha = ((ic >> 24) & 0xFF) / 255f;
+        brushSize = GraffitiItem.getBrushSize(stack);
+        brushShape = GraffitiItem.getBrushShape(stack);
 
-        float[] hsb = Color.RGBtoHSB((itemColor >> 16) & 0xFF, (itemColor >> 8) & 0xFF, itemColor & 0xFF, null);
-        this.hue = hsb[0];
-        this.saturation = hsb[1];
-        this.brightness = hsb[2];
-        this.alpha = ((itemColor >> 24) & 0xFF) / 255f;
+        hexField = new EditBox(font, px + 172, py + 77, 65, 16, Component.literal("Hex"));
+        hexField.setValue(String.format("#%08X", ic));
+        addRenderableWidget(hexField);
 
-        hexField = new EditBox(font, px + 110, py + 15, 85, 16, Component.translatable("screen.graffiti.hex_label"));
-        sizeField = new EditBox(font, px + 110, py + 45, 40, 16, Component.translatable("screen.graffiti.size_label"));
+        sizeDown = Button.builder(Component.literal("-"), b -> { 
+            brushSize = SIZES[Math.max(0, idx(SIZES, brushSize) - 1)]; 
+            saveSize(); 
+        }).bounds(px + 165, py + 99, 16, 16).tooltip(Tooltip.create(Component.literal("Smaller"))).build();
+        addRenderableWidget(sizeDown);
 
-        hexField.setValue(String.format("#%08X", itemColor));
-        sizeField.setValue(String.valueOf(GraffitiItem.brushSize));
+        sizeUp = Button.builder(Component.literal("+"), b -> { 
+            brushSize = SIZES[Math.min(SIZES.length - 1, idx(SIZES, brushSize) + 1)]; 
+            saveSize(); 
+        }).bounds(px + 221, py + 99, 16, 16).tooltip(Tooltip.create(Component.literal("Bigger"))).build();
+        addRenderableWidget(sizeUp);
 
-        this.addRenderableWidget(hexField);
-        this.addRenderableWidget(sizeField);
+        shapeBtn = Button.builder(Component.literal(SHAPES[brushShape]), b -> {
+            brushShape = (brushShape + 1) % 5;
+            shapeBtn.setMessage(Component.literal(SHAPES[brushShape]));
+            GraffitiItem.setBrushShape(stack, brushShape);
+        }).bounds(px + 165, py + 121, 72, 16).tooltip(Tooltip.create(Component.literal("Cycle brush shape"))).build();
+        addRenderableWidget(shapeBtn);
 
         updatePaletteTexture();
     }
 
+    private static int idx(int[] a, int v) { 
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] == v) return i; 
+        }
+        return 0; 
+    }
+    
+    private void saveSize() { 
+        GraffitiItem.setBrushSize(stack, brushSize); 
+    }
+
     private void updatePaletteTexture() {
         if (paletteTexture != null) paletteTexture.close();
-        NativeImage img = new NativeImage(PALETTE_SIZE, PALETTE_SIZE, false);
-        for (int i = 0; i < PALETTE_SIZE; i++) {
-            for (int j = 0; j < PALETTE_SIZE; j++) {
-                int c = Color.HSBtoRGB(hue, i / 100f, 1.0f - (j / 100f));
-                int abgr = 0xFF000000 | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c >> 16) & 0xFF);
-                img.setPixelRGBA(i, j, abgr);
+        NativeImage img = new NativeImage(PS, PS, false);
+        for (int i = 0; i < PS; i++) {
+            for (int j = 0; j < PS; j++) {
+                int c = Color.HSBtoRGB(hue, i / 100f, 1f - j / 100f);
+                img.setPixelRGBA(i, j, 0xFF000000 | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c >> 16) & 0xFF));
             }
         }
         paletteTexture = new DynamicTexture(img);
@@ -78,63 +113,121 @@ public class GraffitiScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        context.fill(px - 10, py - 10, px + PALETTE_SIZE + 105, py + PALETTE_SIZE + 40, 0x88000000);
-        if (textureId != null) context.blit(textureId, px, py, 0, 0, PALETTE_SIZE, PALETTE_SIZE, PALETTE_SIZE, PALETTE_SIZE);
+    public void render(GuiGraphics ctx, int mx, int my, float dt) {
+        ctx.fill(px, py, px + W, py + H, 0xCC0A0A0A);
+        ctx.renderOutline(px, py, W, H, 0xFF555555);
 
-        for (int i = 0; i < PALETTE_SIZE; i++) {
-            context.fill(px + i, py + PALETTE_SIZE + 5, px + i + 1, py + PALETTE_SIZE + 15, 0xFF000000 | Color.HSBtoRGB(i/100f, 1f, 1f));
-            int gray = (int)((i/100f)*255);
-            context.fill(px + i, py + PALETTE_SIZE + 20, px + i + 1, py + PALETTE_SIZE + 30, 0xFF000000 | (gray << 16 | gray << 8 | gray));
+        ctx.drawString(font, title, px + (W - font.width(title)) / 2, py + 6, 0xCCCCCC);
+        ctx.fill(px + 4, py + 18, px + W - 4, py + 19, 0xFF444444);
+
+        int ppX = px + 10, ppY = py + 26;
+        ctx.fill(ppX - 1, ppY - 1, ppX + PS + 1, ppY + PS + 1, 0xFF444444);
+        if (textureId != null) ctx.blit(textureId, ppX, ppY, 0, 0, PS, PS, PS, PS);
+
+        int sx = ppX + (int)(saturation * PS), sy = ppY + (int)((1f - brightness) * PS);
+        ctx.fill(sx - 2, sy - 2, sx + 3, sy + 3, 0xFFFFFFFF);
+
+        int rX = px + 117, rY = ppY;
+        ctx.fill(rX, rY, rX + 126, rY + 116, 0xFF151515);
+        ctx.renderOutline(rX, rY, 126, 116, 0xFF444444);
+
+        int live = (Math.round(alpha * 255) << 24) | (Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF);
+        ctx.fill(rX + 4, rY + 4, rX + 122, rY + 26, live);
+        ctx.fill(rX + 4, rY + 27, rX + 122, rY + 28, 0xFF444444);
+
+        ctx.drawString(font, Component.literal("Current Color"), rX + 6, rY + 34, 0xAAAAAA);
+        ctx.drawString(font, Component.literal("Hex Code:"), rX + 6, rY + 54, 0x888888);
+        ctx.drawString(font, Component.literal("Size:"), rX + 6, rY + 76, 0x888888);
+        ctx.drawString(font, Component.literal("Shape:"), rX + 6, rY + 98, 0x888888);
+
+        String sizeStr = String.valueOf(brushSize);
+        int sizeTextWidth = font.width(sizeStr);
+        int centeredSizeX = (px + 181) + ((40 - sizeTextWidth) / 2); 
+        ctx.drawString(font, Component.literal(sizeStr), centeredSizeX, py + 103, 0xFFFFFF);
+
+        int hY = ppY + PS + 8;
+        ctx.fill(ppX - 1, hY - 1, ppX + PS + 1, hY + 11, 0xFF555555);
+        ctx.drawString(font, Component.literal("Hue"), px + 10, hY + 13, 0xAAAAAA);
+        for (int i = 0; i < PS; i++) {
+            ctx.fill(ppX + i, hY, ppX + i + 1, hY + 10, 0xFF000000 | Color.HSBtoRGB(i / 100f, 1f, 1f));
         }
+        ctx.fill(ppX + (int)(hue * PS) - 1, hY - 1, ppX + (int)(hue * PS) + 2, hY + 11, 0xFFFFFFFF);
 
-        context.fill(px + (int)(saturation * PALETTE_SIZE) - 2, py + (int)((1f - brightness) * PALETTE_SIZE) - 2, px + (int)(saturation * PALETTE_SIZE) + 3, py + (int)((1f - brightness) * PALETTE_SIZE) + 3, 0xFFFFFFFF);
-        context.fill(px + (int)(hue * PALETTE_SIZE), py + PALETTE_SIZE + 4, px + (int)(hue * PALETTE_SIZE) + 2, py + PALETTE_SIZE + 16, 0xFFFFFFFF);
-        context.fill(px + (int)(alpha * PALETTE_SIZE), py + PALETTE_SIZE + 19, px + (int)(alpha * PALETTE_SIZE) + 2, py + PALETTE_SIZE + 31, 0xFFFFFFFF);
+        int aY = hY + 25;
+        ctx.fill(ppX - 1, aY - 1, ppX + PS + 1, aY + 11, 0xFF555555);
+        ctx.drawString(font, Component.literal("Alpha"), px + 10, aY + 13, 0xAAAAAA);
+        for (int i = 0; i < PS; i++) {
+            int g = (int)((i / 100f) * 255);
+            ctx.fill(ppX + i, aY, ppX + i + 1, aY + 10, 0xFF000000 | (g << 16 | g << 8 | g));
+        }
+        ctx.fill(ppX + (int)(alpha * PS) - 1, aY - 1, ppX + (int)(alpha * PS) + 2, aY + 11, 0xFFFFFFFF);
 
-        context.drawString(font, Component.translatable("screen.graffiti.hex_alpha"), px + 110, py + 5, 0xFFFFFF);
-        context.drawString(font, Component.translatable("screen.graffiti.brush_size"), px + 110, py + 35, 0xFFFFFF);
-
-        context.fill(px + 110, py + 70, px + 185, py + 95, 0xFFFFFFFF);
-        context.fill(px + 111, py + 71, px + 184, py + 94, GraffitiItem.getColor(stack));
-
-        super.render(context, mouseX, mouseY, delta);
+        super.render(ctx, mx, my, dt);
     }
 
     private void handleInputs(double mx, double my) {
+        int ppX = px + 10, ppY = py + 26;
+        boolean changed = false;
         boolean hueChanged = false;
-        if (mx >= px && mx < px + PALETTE_SIZE && my >= py && my < py + PALETTE_SIZE) {
-            saturation = (float)((mx - px) / PALETTE_SIZE);
-            brightness = 1.0f - (float)((my - py) / PALETTE_SIZE);
-        } else if (mx >= px && mx < px + PALETTE_SIZE && my >= py + PALETTE_SIZE + 5 && my < py + PALETTE_SIZE + 15) {
-            hue = (float)((mx - px) / PALETTE_SIZE);
+
+        if (mx >= ppX && mx < ppX + PS && my >= ppY && my < ppY + PS) {
+            saturation = (float)((mx - ppX) / PS);
+            brightness = 1f - (float)((my - ppY) / PS);
+            changed = true;
+        } else if (mx >= ppX && mx < ppX + PS && my >= ppY + PS + 8 && my < ppY + PS + 18) {
+            hue = (float)((mx - ppX) / PS);
             hueChanged = true;
-        } else if (mx >= px && mx < px + PALETTE_SIZE && my >= py + PALETTE_SIZE + 20 && my < py + PALETTE_SIZE + 30) {
-            alpha = (float)((mx - px) / PALETTE_SIZE);
+            changed = true;
+        } else if (mx >= ppX && mx < ppX + PS && my >= ppY + PS + 33 && my < ppY + PS + 43) {
+            alpha = (float)((mx - ppX) / PS);
+            changed = true;
         }
+
         if (hueChanged) updatePaletteTexture();
-        updateFinalColor();
+        if (changed) {
+            hexField.setValue(String.format("#%08X", (Math.round(alpha * 255) << 24) | (Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF)));
+            hasPendingColorPacket = true;
+        }
     }
 
-    private void updateFinalColor() {
-        int rgb = Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF;
-        int newColor = (Math.round(alpha * 255) << 24) | rgb;
-
-        GraffitiItem.setColor(stack, newColor);
-        PacketDistributor.sendToServer(new ColorPayload(newColor));
-
-        hexField.setValue(String.format("#%08X", newColor));
-        if (minecraft != null && minecraft.levelRenderer != null) minecraft.levelRenderer.allChanged();
+    @Override 
+    public boolean mouseClicked(double mx, double my, int b) { 
+        handleInputs(mx, my); 
+        return super.mouseClicked(mx, my, b); 
     }
-
-    @Override public boolean mouseClicked(double mx, double my, int b) { handleInputs(mx, my); return super.mouseClicked(mx, my, b); }
-    @Override public boolean mouseDragged(double mx, double my, int b, double dx, double dy) { handleInputs(mx, my); return super.mouseDragged(mx, my, b, dx, dy); }
+    
+    @Override 
+    public boolean mouseDragged(double mx, double my, int b, double dx, double dy) { 
+        handleInputs(mx, my); 
+        return super.mouseDragged(mx, my, b, dx, dy); 
+    }
 
     @Override
-    public void onClose() {
-        if (paletteTexture != null) paletteTexture.close();
-        try { GraffitiItem.brushSize = Integer.parseInt(sizeField.getValue()); } catch (Exception ignored) {}
-        super.onClose();
+    public boolean mouseReleased(double mx, double my, int b) { 
+        flushColorPacket(); 
+        return super.mouseReleased(mx, my, b); 
     }
 
+    @Override
+    public void onClose() { 
+        flushColorPacket(); 
+        if (paletteTexture != null) paletteTexture.close(); 
+        super.onClose(); 
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scanCode, int modifiers) { 
+        if (key == 256) { 
+            onClose(); 
+            return true; 
+        } 
+        return super.keyPressed(key, scanCode, modifiers); 
+    }
+
+    private void flushColorPacket() {
+        if (!hasPendingColorPacket) return;
+        hasPendingColorPacket = false;
+        GraffitiItem.setColor(stack, (Math.round(alpha * 255) << 24) | (Color.HSBtoRGB(hue, saturation, brightness) & 0xFFFFFF));
+        PacketDistributor.sendToServer(new ColorPayload(GraffitiItem.getColor(stack)));
+    }
 }

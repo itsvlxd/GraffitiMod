@@ -17,6 +17,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Random;
 
 public class ClientItemHandler {
     public static void handleAttack(BlockHitResult hit) {
@@ -81,15 +82,56 @@ public class ClientItemHandler {
     }
 
     private static void draw(BlockPos pos, Direction side, int uC, int vC, int color) {
-        int rad = GraffitiItem.brushSize - 1;
+        var client = Minecraft.getInstance();
+        if (client.player == null) return;
+        ItemStack held = client.player.getMainHandItem();
+        int rad = GraffitiItem.getBrushSize(held) - 1;
+        int shape = GraffitiItem.getBrushShape(held);
+        Random rng = new Random();
+        int extraY = (shape == GraffitiItem.SHAPE_LEAKY) ? 3 : 0;
+
         for (int x = -rad; x <= rad; x++) {
-            for (int y = -rad; y <= rad; y++) {
+            for (int y = -rad; y <= rad + extraY; y++) {
                 int u = uC + x, v = vC + y;
-                if (u >= 0 && u < 16 && v >= 0 && v < 16) {
+                if (u < 0 || u >= 16 || v < 0 || v >= 16) continue;
+
+                if (shouldPaint(x, y, rad, shape, rng)) {
                     setPixel(pos, side, u, v, color);
                 }
             }
         }
+    }
+
+    private static boolean shouldPaint(int x, int y, int rad, int shape, Random rng) {
+        return switch (shape) {
+            case GraffitiItem.SHAPE_SQUARE -> true;
+            case GraffitiItem.SHAPE_CIRCLE -> x * x + y * y <= rad * rad;
+            case GraffitiItem.SHAPE_ROUNDED -> isRounded(x, y, rad);
+            case GraffitiItem.SHAPE_CLOUD -> {
+                float dist = (float)(x * x + y * y) / (float)(rad * rad);
+                yield rng.nextFloat() > dist * 0.7f;
+            }
+            case GraffitiItem.SHAPE_LEAKY -> {
+                if (isRounded(x, y, rad)) yield true;
+                if (y > rad) {
+                    Random dripRng = new Random(x * 31 + rad * 7);
+                    if (dripRng.nextFloat() < 0.3f && Math.abs(x) <= rad * 0.65f) {
+                        int dripLen = 1 + dripRng.nextInt(3);
+                        yield y <= rad + dripLen;
+                    }
+                }
+                yield false;
+            }
+            default -> true;
+        };
+    }
+
+    private static boolean isRounded(int x, int y, int rad) {
+        int cr = Math.max(1, rad / 2);
+        if (Math.abs(x) <= rad - cr || Math.abs(y) <= rad - cr) return true;
+        int cx = Math.abs(x) - (rad - cr);
+        int cy = Math.abs(y) - (rad - cr);
+        return cx * cx + cy * cy <= cr * cr;
     }
 
     private static void floodFill(BlockPos pos, Direction side, int startU, int startV, int targetColor) {
