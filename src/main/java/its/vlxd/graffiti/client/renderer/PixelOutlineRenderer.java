@@ -26,8 +26,8 @@ public class PixelOutlineRenderer {
         var client = Minecraft.getInstance();
         if (client.player == null || client.level == null) return;
 
-        boolean hasCan = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL) ||
-                client.player.getOffhandItem().is(GraffitiMod.GRAFFITI_TOOL);
+        boolean hasCan = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get()) ||
+                client.player.getOffhandItem().is(GraffitiMod.GRAFFITI_TOOL.get());
 
         if (!hasCan) return;
 

@@ -39,7 +39,7 @@ public class GraffitiHUD {
         var client = Minecraft.getInstance();
         if (client.player == null) return;
 
-        boolean hasItem = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL);
+        boolean hasItem = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get());
         boolean isCtrlDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS;
 
         if (hasItem && isCtrlDown) {
@@ -74,7 +74,7 @@ public class GraffitiHUD {
         var client = Minecraft.getInstance();
         if (client.player == null || client.options.hideGui) return;
 
-        boolean hasItem = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL);
+        boolean hasItem = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get());
         boolean isCtrlDown = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS;
 
         if (hasItem && isCtrlDown) hudAlpha = Math.min(1.0f, hudAlpha + FADE_SPEED);

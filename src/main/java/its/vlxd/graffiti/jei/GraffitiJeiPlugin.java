@@ -19,7 +19,7 @@ public class GraffitiJeiPlugin implements IModPlugin {
     @Override
     public void registerRecipes(IRecipeRegistration registration) {
         registration.addIngredientInfo(
-                new ItemStack(GraffitiMod.GRAFFITI_TOOL),
+                new ItemStack(GraffitiMod.GRAFFITI_TOOL.get()),
                 VanillaTypes.ITEM_STACK,
                 Component.translatable("jei.graffiti.description")
         );

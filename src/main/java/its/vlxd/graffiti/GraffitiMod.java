@@ -10,16 +10,19 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -38,27 +41,34 @@ public class GraffitiMod {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(Registries.ITEM, MOD_ID);
     public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
 
-    public static final Item GRAFFITI_TOOL = new GraffitiItem(new Item.Properties().stacksTo(1));
+    public static final DeferredHolder<Item, GraffitiItem> GRAFFITI_TOOL =
+            ITEMS.register("graffiti_tool", () -> new GraffitiItem(new Item.Properties().stacksTo(1)));
 
     public static final Map<Long, Map<net.minecraft.core.Direction, int[][]>> SERVER_CACHE = new HashMap<>();
 
     public GraffitiMod(IEventBus modBus) {
-        ITEMS.register("graffiti_tool", () -> GRAFFITI_TOOL);
         TABS.register("graffiti_group", () -> CreativeModeTab.builder()
-                .icon(() -> new ItemStack(GRAFFITI_TOOL))
+                .icon(() -> new ItemStack(GRAFFITI_TOOL.get()))
                 .title(Component.translatable("itemGroup.graffiti.group"))
-                .displayItems((params, output) -> output.accept(GRAFFITI_TOOL))
+                .displayItems((params, output) -> output.accept(GRAFFITI_TOOL.get()))
                 .build());
 
         ITEMS.register(modBus);
         TABS.register(modBus);
 
         modBus.addListener(Networking::registerPayloadHandlers);
+        modBus.addListener(this::addToVanillaTabs);
 
         var bus = NeoForge.EVENT_BUS;
         bus.addListener(this::onServerStarted);
         bus.addListener(this::onServerStopping);
         bus.addListener(this::onPlayerLogin);
+    }
+
+    private void addToVanillaTabs(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
+            event.accept(GRAFFITI_TOOL.get());
+        }
     }
 
     private void onServerStarted(ServerStartedEvent event) {

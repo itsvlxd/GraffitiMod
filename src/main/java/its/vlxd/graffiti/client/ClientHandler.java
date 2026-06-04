@@ -50,7 +50,7 @@ public class ClientHandler {
                 return 0xFF000000 | (itemColor & 0xFFFFFF);
             }
             return 0xFFFFFFFF;
-        }, GraffitiMod.GRAFFITI_TOOL);
+        }, GraffitiMod.GRAFFITI_TOOL.get());
     }
 
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
@@ -74,7 +74,7 @@ public class ClientHandler {
         if (!event.getLevel().isClientSide) return;
         var player = event.getEntity();
         if (player == null) return;
-        if (!player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL)) return;
+        if (!player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get())) return;
 
         var client = Minecraft.getInstance();
         if (client.hitResult instanceof BlockHitResult hit) {
@@ -87,7 +87,7 @@ public class ClientHandler {
         if (!event.getLevel().isClientSide) return;
         var player = event.getEntity();
         if (player == null) return;
-        if (!player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL)) return;
+        if (!player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get())) return;
 
         ClientItemHandler.openScreen(player.getMainHandItem());
     }

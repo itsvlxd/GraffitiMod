@@ -34,7 +34,7 @@ public class Networking {
                         var player = context.player();
                         if (player == null) return;
                         ItemStack stack = player.getMainHandItem();
-                        if (stack.is(GraffitiMod.GRAFFITI_TOOL)) {
+                        if (stack.is(GraffitiMod.GRAFFITI_TOOL.get())) {
                             GraffitiItem.setColor(stack, payload.color());
                         }
                     });

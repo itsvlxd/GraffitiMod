@@ -1,27 +1,17 @@
 {
   "type": "minecraft:crafting_shaped",
-  "category": "misc",
+  "category": "equipment",
   "pattern": [
     " c ",
     "RGB",
     "iii"
   ],
   "key": {
-    "c": {
-      "item": "minecraft:copper_ingot"
-    },
-    "R": {
-      "item": "minecraft:red_dye"
-    },
-    "G": {
-      "item": "minecraft:green_dye"
-    },
-    "B": {
-      "item": "minecraft:blue_dye"
-    },
-    "i": {
-      "item": "minecraft:iron_ingot"
-    }
+    "c": "minecraft:copper_ingot",
+    "R": "minecraft:red_dye",
+    "G": "minecraft:green_dye",
+    "B": "minecraft:blue_dye",
+    "i": "minecraft:iron_ingot"
   },
   "result": {
     "id": "graffiti:graffiti_tool",
