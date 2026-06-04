@@ -11,9 +11,12 @@ import its.vlxd.graffiti.network.PaintPayload;
 import its.vlxd.graffiti.network.RemoveGraffitiPayload;
 import its.vlxd.graffiti.network.SnapshotPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
+import its.vlxd.graffiti.network.SprayEquipPayload;
+import its.vlxd.graffiti.network.SprayPaintPayload;
 import its.vlxd.graffiti.network.UndoPayload;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -56,6 +59,10 @@ public class ClientHandler {
     private static BlockPos lastLookPos = null;
     private static Direction lastLookSide = null;
 
+    private static ItemStack lastHeldItem = ItemStack.EMPTY;
+    private static boolean lastRightDown = false;
+    private static SoundInstance paintLoop = null;
+
 
 
     @SubscribeEvent
@@ -97,7 +104,15 @@ public class ClientHandler {
         var client = Minecraft.getInstance();
         if (client.player == null) return;
 
-        boolean hasItem = client.player.getMainHandItem().is(GraffitiMod.GRAFFITI_TOOL.get());
+        ItemStack held = client.player.getMainHandItem();
+        if (!ItemStack.matches(held, lastHeldItem)) {
+            if (held.is(GraffitiMod.GRAFFITI_TOOL.get())) {
+                PacketDistributor.sendToServer(new SprayEquipPayload());
+            }
+            lastHeldItem = held.copy();
+        }
+
+        boolean hasItem = held.is(GraffitiMod.GRAFFITI_TOOL.get());
         boolean isCKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_C) == GLFW.GLFW_PRESS;
         boolean isZKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_Z) == GLFW.GLFW_PRESS;
         boolean isYKey = GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_Y) == GLFW.GLFW_PRESS;
@@ -160,9 +175,32 @@ public class ClientHandler {
         ItemStack held = client.player.getMainHandItem();
         boolean isGraffitiTool = held.is(GraffitiMod.GRAFFITI_TOOL.get());
         boolean isBrush = held.is(GraffitiMod.BRUSH.get()) || held.is(GraffitiMod.WET_BRUSH.get());
-        if (!isGraffitiTool && !isBrush) return;
+        if (!isGraffitiTool && !isBrush) {
+            if (paintLoop != null) {
+                client.getSoundManager().stop(paintLoop);
+                paintLoop = null;
+            }
+            lastRightDown = false;
+            return;
+        }
 
-        if (GLFW.glfwGetMouseButton(client.getWindow().getWindow(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) != GLFW.GLFW_PRESS) return;
+        boolean rightDown = GLFW.glfwGetMouseButton(client.getWindow().getWindow(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+
+        if (isGraffitiTool && rightDown && !lastRightDown && client.hitResult instanceof BlockHitResult hit) {
+            BlockPos pos = hit.getBlockPos();
+            paintLoop = new SpraySoundInstance(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+            client.getSoundManager().play(paintLoop);
+            PacketDistributor.sendToServer(new SprayPaintPayload(pos));
+        }
+
+        if (isGraffitiTool && !rightDown && lastRightDown && paintLoop != null) {
+            client.getSoundManager().stop(paintLoop);
+            paintLoop = null;
+        }
+
+        lastRightDown = rightDown;
+
+        if (!rightDown) return;
         if (!(client.hitResult instanceof BlockHitResult hit)) return;
 
         BlockPos pos = hit.getBlockPos();
@@ -187,7 +225,7 @@ public class ClientHandler {
                 if (faces != null) {
                     int[][] grid = faces.get(side);
                     if (grid != null) {
-                        int alphaReduction = held.is(GraffitiMod.WET_BRUSH.get()) ? 128 : 32;
+                        int alphaReduction = held.is(GraffitiMod.WET_BRUSH.get()) ? 51 : 16;
                         for (int du = -3; du <= 3; du++) {
                             for (int dv = -3; dv <= 3; dv++) {
                                 if (du * du + dv * dv > 9) continue;

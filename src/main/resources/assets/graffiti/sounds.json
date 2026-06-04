@@ -1,0 +1,8 @@
+{
+  "item.spray_can_equip": {
+    "sounds": ["graffiti:spray_can_equip"]
+  },
+  "item.spray_can_paint": {
+    "sounds": ["graffiti:spray_can_paint"]
+  }
+}

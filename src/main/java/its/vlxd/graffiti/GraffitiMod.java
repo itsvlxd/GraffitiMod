@@ -15,6 +15,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
@@ -60,6 +61,7 @@ public class GraffitiMod {
 
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(Registries.ITEM, MOD_ID);
     public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
+    public static final DeferredRegister<SoundEvent> SOUND_EVENTS = DeferredRegister.create(Registries.SOUND_EVENT, MOD_ID);
 
     public static final DeferredHolder<Item, GraffitiItem> GRAFFITI_TOOL =
             ITEMS.register("graffiti_tool", () -> new GraffitiItem(new Item.Properties().stacksTo(1)));
@@ -68,6 +70,12 @@ public class GraffitiMod {
             ITEMS.register("brush", () -> new Item(new Item.Properties().stacksTo(1)));
     public static final DeferredHolder<Item, Item> WET_BRUSH =
             ITEMS.register("wet_brush", () -> new Item(new Item.Properties().stacksTo(1)));
+
+    public static final DeferredHolder<SoundEvent, SoundEvent> SPRAY_CAN_EQUIP =
+            SOUND_EVENTS.register("item.spray_can_equip", () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "item.spray_can_equip")));
+
+    public static final DeferredHolder<SoundEvent, SoundEvent> SPRAY_CAN_PAINT =
+            SOUND_EVENTS.register("item.spray_can_paint", () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "item.spray_can_paint")));
 
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, int[][]>>> SERVER_CACHE = new HashMap<>();
 
@@ -92,6 +100,7 @@ public class GraffitiMod {
 
         ITEMS.register(modBus);
         TABS.register(modBus);
+        SOUND_EVENTS.register(modBus);
 
         modBus.addListener(Networking::registerPayloadHandlers);
         modBus.addListener(this::addToVanillaTabs);

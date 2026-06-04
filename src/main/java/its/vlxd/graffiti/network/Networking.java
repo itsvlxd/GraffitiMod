@@ -99,6 +99,18 @@ public class Networking {
                 CleanPayload.CODEC,
                 (payload, context) -> handleCleanServer(payload, context)
         );
+
+        registrar.playToServer(
+                SprayEquipPayload.TYPE,
+                SprayEquipPayload.CODEC,
+                (payload, context) -> handleSprayEquip(payload, context)
+        );
+
+        registrar.playToServer(
+                SprayPaintPayload.TYPE,
+                SprayPaintPayload.CODEC,
+                (payload, context) -> handleSprayPaint(payload, context)
+        );
     }
 
     private static void dispatchClientRemove(RemoveGraffitiPayload payload, IPayloadContext context) {
@@ -192,11 +204,6 @@ public class Networking {
             var server = player.getServer();
             if (server != null) {
                 GraffitiMod.recordPaintTick(ck, posL, payload.side(), server.getTickCount());
-                var level = server.getLevel(player.level().dimension());
-                if (level != null) {
-                    tryPlaySound(player, level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
-                            SoundEvents.FIRECHARGE_USE, 1.5f);
-                }
             }
 
             for (var otherPlayer : player.getServer().getLevel(player.level().dimension()).players()) {
@@ -215,9 +222,9 @@ public class Networking {
             ItemStack held = player.getMainHandItem();
             int alphaReduction;
             if (held.is(GraffitiMod.WET_BRUSH.get())) {
-                alphaReduction = 128;
+                alphaReduction = 51;
             } else if (held.is(GraffitiMod.BRUSH.get())) {
-                alphaReduction = 32;
+                alphaReduction = 16;
             } else {
                 return;
             }
@@ -266,6 +273,31 @@ public class Networking {
                             SoundEvents.BRUSH_GENERIC, 1.0f);
                     GraffitiMod.broadcastFace(pos, side, grid, level);
                 }
+            }
+        });
+    }
+
+    private static void handleSprayEquip(SprayEquipPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            var player = context.player();
+            if (player == null || player.getServer() == null) return;
+            var level = player.getServer().getLevel(player.level().dimension());
+            if (level != null) {
+                level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        GraffitiMod.SPRAY_CAN_EQUIP.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
+            }
+        });
+    }
+
+    private static void handleSprayPaint(SprayPaintPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            var player = context.player();
+            if (player == null || player.getServer() == null) return;
+            var level = player.getServer().getLevel(player.level().dimension());
+            if (level != null) {
+                BlockPos pos = payload.pos();
+                level.playSound(null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                        GraffitiMod.SPRAY_CAN_PAINT.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
             }
         });
     }
