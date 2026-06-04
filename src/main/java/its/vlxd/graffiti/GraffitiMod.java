@@ -13,12 +13,14 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
@@ -346,6 +348,35 @@ public class GraffitiMod {
                 .put(side, tick);
     }
 
+    private static final Direction[] HORIZONTAL_CYCLE = {
+        Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST
+    };
+
+    private static Direction mapHorizontalFace(Direction dir, int rotations) {
+        if (dir == Direction.UP || dir == Direction.DOWN) return dir;
+        for (int i = 0; i < 4; i++) {
+            if (HORIZONTAL_CYCLE[i] == dir) {
+                return HORIZONTAL_CYCLE[(i + rotations % 4 + 4) % 4];
+            }
+        }
+        return dir;
+    }
+
+    private static Direction getHitFace(BlockPos pos, net.minecraft.world.entity.player.Player player) {
+        Vec3 delta = player.position().subtract(Vec3.atCenterOf(pos));
+        double absX = Math.abs(delta.x);
+        double absY = Math.abs(delta.y);
+        double absZ = Math.abs(delta.z);
+
+        if (absX >= absY && absX >= absZ) {
+            return delta.x > 0 ? Direction.WEST : Direction.EAST;
+        }
+        if (absY >= absZ) {
+            return delta.y > 0 ? Direction.DOWN : Direction.UP;
+        }
+        return delta.z > 0 ? Direction.NORTH : Direction.SOUTH;
+    }
+
     public static int[][] rotateGrid(int[][] grid, int rotations) {
         if (rotations == 0 || grid == null) return grid;
         int[][] result = new int[16][16];
@@ -379,13 +410,25 @@ public class GraffitiMod {
         var faces = chunk.get(posL);
         if (faces == null || faces.isEmpty()) return;
 
+        Direction hitFace = getHitFace(pos, player);
+        int normRot = 0;
+        if (hitFace != Direction.UP && hitFace != Direction.DOWN) {
+            for (int i = 0; i < 4; i++) {
+                if (HORIZONTAL_CYCLE[i] == hitFace) {
+                    normRot = (4 - i) % 4;
+                    break;
+                }
+            }
+        }
+
         Map<Direction, int[][]> clipboard = new EnumMap<>(Direction.class);
         for (var entry : faces.entrySet()) {
+            Direction normalizedFace = mapHorizontalFace(entry.getKey(), normRot);
             int[][] copy = new int[16][16];
             for (int u = 0; u < 16; u++) {
                 System.arraycopy(entry.getValue()[u], 0, copy[u], 0, 16);
             }
-            clipboard.put(entry.getKey(), copy);
+            clipboard.put(normalizedFace, copy);
         }
         PLAYER_CLIPBOARD.put(player.getUUID(), clipboard);
 
@@ -431,11 +474,11 @@ public class GraffitiMod {
                 ? player.getServer().getLevel(player.level().dimension()) : null;
 
         for (var entry : clipboard.entrySet()) {
-            int[][] rotated = rotateGrid(entry.getValue(), rotations);
-            targetFaces.put(entry.getKey(), rotated);
+            Direction newFace = mapHorizontalFace(entry.getKey(), rotations);
+            targetFaces.put(newFace, entry.getValue());
 
             if (level != null) {
-                broadcastFace(pos, entry.getKey(), rotated, level);
+                broadcastFace(pos, newFace, entry.getValue(), level);
             }
         }
     }
