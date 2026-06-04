@@ -38,6 +38,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.awt.Color;
 import java.io.*;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
@@ -61,6 +62,8 @@ public class GraffitiMod {
     public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, Integer>>> LAST_PAINT_TICK = new HashMap<>();
     private static final int IDLE_TICKS = 20;
     public static final Map<java.util.UUID, Deque<Map<Direction, int[][]>>> PLAYER_CLIPBOARD = new HashMap<>();
+    private static final long DESATURATION_INTERVAL = 720_000L;
+    private long lastDesatTick = 0;
 
     public GraffitiMod(IEventBus modBus) {
         TABS.register("graffiti_group", () -> CreativeModeTab.builder()
@@ -144,6 +147,8 @@ public class GraffitiMod {
         } catch (Exception e) {
             LOGGER.error("Failed to load graffiti data", e);
         }
+
+        lastDesatTick = event.getServer().getTickCount() - (event.getServer().getTickCount() % DESATURATION_INTERVAL);
     }
 
     private void onServerStopping(ServerStoppingEvent event) {
@@ -232,6 +237,11 @@ public class GraffitiMod {
                 if (blockEntry.getValue().isEmpty()) blockIter.remove();
             }
             if (ckEntry.getValue().isEmpty()) ckIter.remove();
+        }
+
+        if (currentTick - lastDesatTick >= DESATURATION_INTERVAL) {
+            desaturateAll(event.getServer().overworld());
+            lastDesatTick += DESATURATION_INTERVAL;
         }
     }
 
@@ -346,6 +356,44 @@ public class GraffitiMod {
         LAST_PAINT_TICK.computeIfAbsent(ck, k -> new HashMap<>())
                 .computeIfAbsent(posL, k -> new EnumMap<>(net.minecraft.core.Direction.class))
                 .put(side, tick);
+    }
+
+    private void desaturateAll(ServerLevel level) {
+        List<PaintPayload> syncData = new ArrayList<>();
+        var rng = new Random();
+
+        SERVER_CACHE.forEach((ck, blocks) -> blocks.forEach((posL, faces) -> faces.forEach((side, grid) -> {
+            for (int u = 0; u < 16; u++) {
+                for (int v = 0; v < 16; v++) {
+                    int color = grid[u][v];
+                    if (color == 0) continue;
+
+                    int a = (color >> 24) & 0xFF;
+                    int r = (color >> 16) & 0xFF;
+                    int g = (color >> 8) & 0xFF;
+                    int b = color & 0xFF;
+
+                    float[] hsb = new float[3];
+                    Color.RGBtoHSB(r, g, b, hsb);
+                    float reduction = 0.02f + rng.nextFloat() * 0.08f;
+                    hsb[1] *= (1.0f - reduction);
+                    hsb[1] = Math.max(hsb[1], 0.4f);
+                    int rgb = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
+
+                    int newColor = (a << 24) | (rgb & 0xFFFFFF);
+                    grid[u][v] = newColor;
+                    syncData.add(new PaintPayload(BlockPos.of(posL), side, u, v, newColor, 1));
+                }
+            }
+        })));
+
+        if (syncData.isEmpty()) return;
+
+        var payload = new SyncGraffitiPayload(syncData);
+        for (var player : level.getServer().getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player, payload);
+        }
+        LOGGER.info("Desaturated {} graffiti pixels (30 in-game days)", syncData.size());
     }
 
     private static final Direction[] HORIZONTAL_CYCLE = {
