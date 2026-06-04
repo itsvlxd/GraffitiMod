@@ -22,10 +22,13 @@ public class ClientItemHandler {
     public static void handleAttack(BlockHitResult hit) {
         var client = Minecraft.getInstance();
         if (client.player != null) {
+            BlockPos pos = hit.getBlockPos();
+            double reach = client.player.blockInteractionRange();
+            if (client.player.distanceToSqr(Vec3.atCenterOf(pos)) > reach * reach) return;
+
             ItemStack stack = client.player.getMainHandItem();
             int itemColor = GraffitiItem.getColor(stack);
 
-            BlockPos pos = hit.getBlockPos();
             Direction side = hit.getDirection();
             Vec3 r = hit.getLocation().subtract(Vec3.atLowerCornerOf(pos));
 
