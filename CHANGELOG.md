@@ -1,3 +1,29 @@
+# [1.2.0](https://github.com/itsvlxd/GraffitiMod/compare/v1.1.2...v1.2.0) (2026-06-04)
+
+
+### Bug Fixes
+
+* **clipboard:** fix the clipboard not considering block type ([9acad59](https://github.com/itsvlxd/GraffitiMod/commit/9acad59f6aacda3ce0c58a32de3ba15601339047))
+* **frotation:** fix face rotation logic to preserve graffiti block changes ([9141799](https://github.com/itsvlxd/GraffitiMod/commit/914179976234a8e4a59f1653ef9bfba47d75182c))
+* **lock:** fix spray can not saving properly ([17b0b66](https://github.com/itsvlxd/GraffitiMod/commit/17b0b66e4447c39c9f12417eda0c77a09d945b78))
+* **pixeloutline:** remove pixel outliner glitch ([e7c8c46](https://github.com/itsvlxd/GraffitiMod/commit/e7c8c4611eba071f38dacb1057286de31005ff59))
+* **sound:** play sound only if the player can reach the block ([4c339e5](https://github.com/itsvlxd/GraffitiMod/commit/4c339e5bd795fad4709ce01345bb5c581eb55ed8))
+
+
+### Features
+
+* **block-transfer:** add the ability for users to preserve graffity blocks ([487a3a7](https://github.com/itsvlxd/GraffitiMod/commit/487a3a7fe0092886f5c5aaa0d3ecfd164b8c7c9b))
+* **brush:** add a bursh and wet brush to be able to clean graffiti from walls ([f519138](https://github.com/itsvlxd/GraffitiMod/commit/f51913849549e1b920861009a682d6e53f2d98d6))
+* **can:** add spray can refill option ([4491b2b](https://github.com/itsvlxd/GraffitiMod/commit/4491b2bd7c091218ae4c0faf2a31aee1b9c2dc12))
+* **item:** add a persistent message showing the current color and mode ([9fe49c3](https://github.com/itsvlxd/GraffitiMod/commit/9fe49c3e75ae0d5bf23b623ee40ddf3157b345fa))
+* **lock:** add color lock for graffiti sprays ([ff65f49](https://github.com/itsvlxd/GraffitiMod/commit/ff65f49f6939ad731a9ee662041bee1a11250e26))
+* **menu:** add a new graffiti editor menu with custom size and shapes ([e0d1ec5](https://github.com/itsvlxd/GraffitiMod/commit/e0d1ec5377d2a7984c0db6152c5d4f170e97b3b6))
+* **saturation:** make the graffiti drawing age in saturation after a while ([315a4dc](https://github.com/itsvlxd/GraffitiMod/commit/315a4dcab88dea749f9a5a6208f7311bd9c17921))
+* **saturation:** saturation got capped at 80% ([6209fe7](https://github.com/itsvlxd/GraffitiMod/commit/6209fe769b014e3d3561b47cd9b90beee8b05ab8))
+* **snapshots:** save graffiti snapshots allowing users to undo and redo ([4fe9567](https://github.com/itsvlxd/GraffitiMod/commit/4fe9567ab14d42c176480ea27c3f8a86c0569cdb))
+* **sounds:** add better sound handling ([99fe911](https://github.com/itsvlxd/GraffitiMod/commit/99fe911e3bc29ddea5583d1b3ce3b6d2aff662e6))
+* **sounds:** add custom sounds for spray can equip and paint sfx ([8684239](https://github.com/itsvlxd/GraffitiMod/commit/868423951529d7f05b5d22b0804e1d174b8e8c4c))
+
 ## [1.1.2](https://github.com/itsvlxd/GraffitiMod/compare/v1.1.1...v1.1.2) (2026-06-04)
 
 
