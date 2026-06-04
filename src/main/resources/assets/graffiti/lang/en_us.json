@@ -16,5 +16,6 @@
   "option.graffiti.enabled": "Enable Graffiti Rendering",
   "option.graffiti.culling": "Enable Smart Culling",
   "tooltip.graffiti.culling": "Hides graffiti that is not in your field of view to improve FPS.",
-  "option.graffiti.distance": "Render Distance"
+  "option.graffiti.distance": "Render Distance",
+  "jei.graffiti.description": "Spray paint on any block face!\n\n§7Right-click§r to open the color editor (HSB, HEX, brush size).\n§7Left-click§r on a block face to paint.\nHold §7Ctrl + A/D§r to switch tools: Pencil, Eraser, Fill, Color Picker.\n\nGraffiti syncs across players and persists on disk."
 }

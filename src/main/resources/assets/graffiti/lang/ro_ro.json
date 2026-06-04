@@ -16,5 +16,6 @@
   "option.graffiti.enabled": "Activează redarea graffiti",
   "option.graffiti.culling": "Optimizare (Culling)",
   "tooltip.graffiti.culling": "Ascunde graffiti-ul care nu este în câmpul vizual pentru a îmbunătăți FPS-ul.",
-  "option.graffiti.distance": "Distanță de randare"
+  "option.graffiti.distance": "Distanță de randare",
+  "jei.graffiti.description": "Pictați cu spray pe orice suprafață!\n\n§7Click dreapta§r pentru a deschide editorul de culori (HSB, HEX, dimensiune pensulă).\n§7Click stânga§r pe o suprafață pentru a picta.\nȚineți §7Ctrl + A/D§r pentru a schimba uneltele: Creion, Radieră, Umplere, Pipetă.\n\nGraffiti-ul se sincronizează între jucători și se salvează pe disc."
 }
