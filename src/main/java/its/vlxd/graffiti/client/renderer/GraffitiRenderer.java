@@ -4,12 +4,9 @@ import its.vlxd.graffiti.GraffitiMod;
 import its.vlxd.graffiti.config.GraffitiConfig;
 import its.vlxd.graffiti.network.PaintPayload;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -23,6 +20,7 @@ import org.joml.Matrix4f;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -34,15 +32,22 @@ public class GraffitiRenderer {
 
     public static final List<PaintPayload> PIXELS = Collections.synchronizedList(new ArrayList<>());
     public static final Map<Long, Map<Long, Map<Direction, int[][]>>> GRAFFITI_CACHE = new ConcurrentHashMap<>();
+    public static final Map<Long, Map<Long, Map<Direction, List<BakedQuad>>>> BAKED_CACHE = new ConcurrentHashMap<>();
 
     private static String lastWorldName = "";
-    private static boolean needsSave = false;
+    private static volatile boolean isSaving = false;
     private static final ResourceLocation WHITE_TEXTURE = ResourceLocation.parse("graffiti:textures/misc/white.png");
-
     private static Frustum frustum;
 
-    public static void init() {
+    public static class BakedQuad {
+        public final int u, v, w, h, color;
+        public final float depth;
+        public BakedQuad(int u, int v, int w, int h, int color, float depth) {
+            this.u = u; this.v = v; this.w = w; this.h = h; this.color = color; this.depth = depth;
+        }
     }
+
+    public static void init() {}
 
     public static void render(RenderLevelStageEvent event) {
         if (!GraffitiConfig.get().enabled) return;
@@ -55,13 +60,9 @@ public class GraffitiRenderer {
         synchronized (PIXELS) {
             if (!PIXELS.isEmpty()) {
                 for (PaintPayload p : PIXELS) {
-                    long ck = ChunkPos.asLong(p.pos().getX() >> 4, p.pos().getZ() >> 4);
-                    GRAFFITI_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
-                            .computeIfAbsent(p.pos().asLong(), k -> new EnumMap<>(Direction.class))
-                            .computeIfAbsent(p.side(), k -> new int[GRID_SIZE][GRID_SIZE])[p.u()][p.v()] = p.color();
+                    addPixelToCache(p);
                 }
                 PIXELS.clear();
-                needsSave = true;
             }
         }
 
@@ -70,11 +71,9 @@ public class GraffitiRenderer {
         var poseStack = event.getPoseStack();
         var bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
         var buffer = bufferSource.getBuffer(RenderType.entityTranslucent(WHITE_TEXTURE));
-        var camera = event.getCamera();
-        var cameraPos = camera.getPosition();
+        var cameraPos = event.getCamera().getPosition();
 
         frustum = event.getFrustum();
-
         double maxDistSq = Math.pow(GraffitiConfig.get().renderDistance, 2);
 
         poseStack.pushPose();
@@ -92,7 +91,8 @@ public class GraffitiRenderer {
                 var blockIter = chunk.entrySet().iterator();
                 while (blockIter.hasNext()) {
                     var blockEntry = blockIter.next();
-                    BlockPos pos = BlockPos.of(blockEntry.getKey());
+                    long posLong = blockEntry.getKey();
+                    BlockPos pos = BlockPos.of(posLong);
 
                     if (pos.distToCenterSqr(cameraPos) > maxDistSq) continue;
 
@@ -102,31 +102,73 @@ public class GraffitiRenderer {
 
                     if (world.getBlockState(pos).isAir()) {
                         blockIter.remove();
-                        needsSave = true;
+                        var bChunk = BAKED_CACHE.get(ck);
+                        if (bChunk != null) bChunk.remove(posLong);
+                        queueAsyncSave();
                         continue;
                     }
 
+                    var bakedBlockMap = BAKED_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
+                            .computeIfAbsent(posLong, k -> new EnumMap<>(Direction.class));
+
+                    poseStack.pushPose();
+                    poseStack.translate(pos.getX(), pos.getY(), pos.getZ());
+                    Matrix4f model = poseStack.last().pose();
+
                     for (var sideEntry : blockEntry.getValue().entrySet()) {
-                        renderOptimizedFace(poseStack, buffer, pos, sideEntry.getKey(), sideEntry.getValue(), world);
+                        Direction side = sideEntry.getKey();
+                        
+                        int light = LevelRenderer.getLightColor(world, pos.relative(side));
+                        
+                        List<BakedQuad> bakedQuads = bakedBlockMap.get(side);
+                        if (bakedQuads == null) {
+                            bakedQuads = bakeFace(world, pos, side, sideEntry.getValue());
+                            bakedBlockMap.put(side, bakedQuads);
+                        }
+
+                        for (int i = 0; i < bakedQuads.size(); i++) {
+                            BakedQuad q = bakedQuads.get(i);
+                            drawQuad(model, buffer, side, q.u, q.v, q.w, q.h, q.color, light, q.depth);
+                        }
                     }
+                    poseStack.popPose();
                 }
 
                 if (chunk.isEmpty()) {
                     GRAFFITI_CACHE.remove(ck);
+                    BAKED_CACHE.remove(ck);
                 }
             }
         }
 
         poseStack.popPose();
         bufferSource.endBatch(RenderType.entityTranslucent(WHITE_TEXTURE));
+    }
 
-        if (needsSave) {
-            save();
-            needsSave = false;
+    public static void addPixelToCache(PaintPayload p) {
+        long ck = ChunkPos.asLong(p.pos().getX() >> 4, p.pos().getZ() >> 4);
+        long posLong = p.pos().asLong();
+        
+        GRAFFITI_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
+                .computeIfAbsent(posLong, k -> new EnumMap<>(Direction.class))
+                .computeIfAbsent(p.side(), k -> new int[GRID_SIZE][GRID_SIZE])[p.u()][p.v()] = p.color();
+        
+        invalidateFace(ck, posLong, p.side());
+        queueAsyncSave();
+    }
+
+    public static void invalidateFace(long ck, long posLong, Direction side) {
+        var chunkMap = BAKED_CACHE.get(ck);
+        if (chunkMap != null) {
+            var blockMap = chunkMap.get(posLong);
+            if (blockMap != null) {
+                blockMap.remove(side);
+            }
         }
     }
 
-    private static void renderOptimizedFace(com.mojang.blaze3d.vertex.PoseStack matrices, com.mojang.blaze3d.vertex.VertexConsumer buffer, BlockPos pos, Direction side, int[][] grid, net.minecraft.client.multiplayer.ClientLevel world) {
+    private static List<BakedQuad> bakeFace(net.minecraft.world.level.BlockGetter world, BlockPos pos, Direction side, int[][] grid) {
+        List<BakedQuad> quads = new ArrayList<>();
         boolean[][] visited = new boolean[GRID_SIZE][GRID_SIZE];
         float[][] depths = new float[GRID_SIZE][GRID_SIZE];
 
@@ -137,11 +179,6 @@ public class GraffitiRenderer {
                 }
             }
         }
-
-        int light = LevelRenderer.getLightColor(world, pos.relative(side));
-        matrices.pushPose();
-        matrices.translate(pos.getX(), pos.getY(), pos.getZ());
-        Matrix4f model = matrices.last().pose();
 
         for (int v = 0; v < GRID_SIZE; v++) {
             for (int u = 0; u < GRID_SIZE; u++) {
@@ -169,11 +206,20 @@ public class GraffitiRenderer {
                         for (int dx = 0; dx < w; dx++) visited[u + dx][v + dy] = true;
                     }
 
-                    drawQuad(model, buffer, side, u, v, w, h, color, light, currentDepth);
+                    quads.add(new BakedQuad(u, v, w, h, color, currentDepth));
                 }
             }
         }
-        matrices.popPose();
+        return quads;
+    }
+
+    public static void queueAsyncSave() {
+        if (isSaving || lastWorldName.isEmpty()) return;
+        isSaving = true;
+        CompletableFuture.runAsync(() -> {
+            save();
+            isSaving = false;
+        });
     }
 
     private static void drawQuad(Matrix4f m, com.mojang.blaze3d.vertex.VertexConsumer b, Direction side, int u, int v, int w, int h, int color, int light, float offset) {
@@ -278,6 +324,7 @@ public class GraffitiRenderer {
                     }
                 }
             }
+            out.flush();
         } catch (IOException e) {
             GraffitiMod.LOGGER.error("Failed to save graffiti cache", e);
         }
@@ -286,6 +333,7 @@ public class GraffitiRenderer {
     public static void load() {
         File file = getSaveFile();
         GRAFFITI_CACHE.clear();
+        BAKED_CACHE.clear();
         if (!file.exists()) return;
         try (DataInputStream in = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(file))))) {
             int magic = in.readInt();
@@ -314,22 +362,6 @@ public class GraffitiRenderer {
                         blocks.put(pos, faces);
                     }
                     GRAFFITI_CACHE.put(ck, blocks);
-                }
-            } else {
-                int count = magic;
-                for (int i = 0; i < count; i++) {
-                    long pos = in.readLong();
-                    int sideId = in.readByte();
-                    int u = in.readUnsignedByte();
-                    int v = in.readUnsignedByte();
-                    int color = in.readInt();
-
-                    if (u < GRID_SIZE && v < GRID_SIZE && sideId >= 0 && sideId < 6) {
-                        long ck = ChunkPos.asLong(BlockPos.of(pos).getX() >> 4, BlockPos.of(pos).getZ() >> 4);
-                        GRAFFITI_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
-                                .computeIfAbsent(pos, k -> new EnumMap<>(Direction.class))
-                                .computeIfAbsent(Direction.from3DDataValue(sideId), k -> new int[GRID_SIZE][GRID_SIZE])[u][v] = color;
-                    }
                 }
             }
         } catch (IOException e) {
@@ -366,35 +398,13 @@ public class GraffitiRenderer {
         if (chunk != null) {
             chunk.remove(pos.asLong());
             if (chunk.isEmpty()) GRAFFITI_CACHE.remove(ck);
-            needsSave = true;
-        }
-    }
-
-    public static int[][] rotateGrid(int[][] grid, int rotations) {
-        if (rotations == 0 || grid == null) return grid;
-        int[][] result = new int[GRID_SIZE][GRID_SIZE];
-        for (int u = 0; u < GRID_SIZE; u++) {
-            for (int v = 0; v < GRID_SIZE; v++) {
-                int val = grid[u][v];
-                if (val == 0) continue;
-                int nu, nv;
-                switch ((rotations % 4 + 4) % 4) {
-                    case 1 -> { nu = GRID_SIZE - 1 - v; nv = u; }
-                    case 2 -> { nu = GRID_SIZE - 1 - u; nv = GRID_SIZE - 1 - v; }
-                    case 3 -> { nu = v; nv = GRID_SIZE - 1 - u; }
-                    default -> { nu = u; nv = v; }
-                }
-                result[nu][nv] = val;
+            
+            var bChunk = BAKED_CACHE.get(ck);
+            if (bChunk != null) {
+                bChunk.remove(pos.asLong());
+                if (bChunk.isEmpty()) BAKED_CACHE.remove(ck);
             }
+            queueAsyncSave();
         }
-        return result;
-    }
-
-    public static void addPixelToCache(PaintPayload p) {
-        long ck = ChunkPos.asLong(p.pos().getX() >> 4, p.pos().getZ() >> 4);
-        GRAFFITI_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
-                .computeIfAbsent(p.pos().asLong(), k -> new EnumMap<>(Direction.class))
-                .computeIfAbsent(p.side(), k -> new int[GRID_SIZE][GRID_SIZE])[p.u()][p.v()] = p.color();
-        needsSave = true;
     }
 }

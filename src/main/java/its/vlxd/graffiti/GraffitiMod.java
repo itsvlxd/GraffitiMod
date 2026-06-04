@@ -232,10 +232,11 @@ public class GraffitiMod {
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         var player = event.getEntity();
         var server = player.getServer();
-        if (server == null) return;
+        if (server == null || !(player instanceof ServerPlayer sp)) return;
 
         server.execute(() -> {
             List<PaintPayload> syncData = new ArrayList<>();
+            
             SERVER_CACHE.forEach((ck, blocks) -> blocks.forEach((posL, faces) -> faces.forEach((side, grid) -> {
                 for (int u = 0; u < 16; u++) {
                     for (int v = 0; v < 16; v++) {
@@ -247,7 +248,11 @@ public class GraffitiMod {
             })));
 
             if (!syncData.isEmpty()) {
-                PacketDistributor.sendToPlayer((ServerPlayer) player, new SyncGraffitiPayload(syncData));
+                int batchSize = 1000; 
+                for (int i = 0; i < syncData.size(); i += batchSize) {
+                    List<PaintPayload> subList = syncData.subList(i, Math.min(i + batchSize, syncData.size()));
+                    PacketDistributor.sendToPlayer(sp, new SyncGraffitiPayload(new ArrayList<>(subList)));
+                }
             }
         });
     }

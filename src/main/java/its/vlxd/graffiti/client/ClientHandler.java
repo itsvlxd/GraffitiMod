@@ -31,6 +31,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Objects;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -63,8 +64,6 @@ public class ClientHandler {
     private static ItemStack lastHeldItem = ItemStack.EMPTY;
     private static boolean lastRightDown = false;
     private static SoundInstance paintLoop = null;
-
-
 
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
@@ -262,6 +261,8 @@ public class ClientHandler {
                                 grid[tu][tv] = alpha <= 0 ? 0 : (alpha << 24) | (color & 0xFFFFFF);
                             }
                         }
+                        GraffitiRenderer.invalidateFace(ck, pos.asLong(), side);
+                        GraffitiRenderer.queueAsyncSave();
                     }
                 }
             }
@@ -270,12 +271,14 @@ public class ClientHandler {
         }
     }
 
-    public static void onRenderGui(RenderGuiEvent.Post event) {
-    }
+    public static void onRenderGui(RenderGuiEvent.Post event) {}
 
     private static void clearClientCache() {
         if (GraffitiRenderer.GRAFFITI_CACHE != null) {
             GraffitiRenderer.GRAFFITI_CACHE.clear();
+        }
+        if (GraffitiRenderer.BAKED_CACHE != null) {
+            GraffitiRenderer.BAKED_CACHE.clear();
         }
         if (GraffitiRenderer.PIXELS != null) {
             GraffitiRenderer.PIXELS.clear();
@@ -305,12 +308,15 @@ public class ClientHandler {
                     .computeIfAbsent(ck, k -> new HashMap<>())
                     .computeIfAbsent(payload.pos().asLong(), k -> new EnumMap<>(Direction.class))
                     .put(payload.side(), grid);
+            
+            GraffitiRenderer.invalidateFace(ck, payload.pos().asLong(), payload.side());
         });
     }
 
     public static void handleSyncPacket(SyncGraffitiPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             GraffitiRenderer.GRAFFITI_CACHE.clear();
+            GraffitiRenderer.BAKED_CACHE.clear();
             for (PaintPayload p : payload.allPixels()) {
                 GraffitiRenderer.addPixelToCache(p);
             }
