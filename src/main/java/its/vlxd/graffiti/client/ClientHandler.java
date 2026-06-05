@@ -64,6 +64,7 @@ public class ClientHandler {
 
     private static ItemStack lastHeldItem = ItemStack.EMPTY;
     private static boolean lastRightDown = false;
+    private static int sprayPaintTicks = 0;
     private static SoundInstance paintLoop = null;
 
     @SubscribeEvent
@@ -218,6 +219,17 @@ public class ClientHandler {
             paintLoop = new SpraySoundInstance(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
             client.getSoundManager().play(paintLoop);
             PacketDistributor.sendToServer(new SprayPaintPayload(pos));
+            sprayPaintTicks = 0;
+        }
+
+        if (isGraffitiTool && rightDown) {
+            sprayPaintTicks++;
+            if (sprayPaintTicks >= 10 && client.hitResult instanceof BlockHitResult hit) {
+                sprayPaintTicks = 0;
+                PacketDistributor.sendToServer(new SprayPaintPayload(hit.getBlockPos()));
+            }
+        } else {
+            sprayPaintTicks = 0;
         }
 
         if (isGraffitiTool && !rightDown && lastRightDown) {
