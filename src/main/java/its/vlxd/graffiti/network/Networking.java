@@ -276,7 +276,7 @@ public class Networking {
             boolean changed = false;
             for (int du = -radius; du <= radius; du++) {
                 for (int dv = -radius; dv <= radius; dv++) {
-                    boolean paint = switch (shape) {
+                    boolean paint = switch (radius <= 0 ? BrushItem.SHAPE_SQUARE : shape) {
                         case BrushItem.SHAPE_CIRCLE -> du * du + dv * dv <= radius * radius;
                         case BrushItem.SHAPE_ROUNDED -> {
                             int cr = Math.max(1, radius / 2);

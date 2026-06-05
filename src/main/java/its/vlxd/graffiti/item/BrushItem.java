@@ -39,7 +39,9 @@ public class BrushItem extends Item {
 
     public static int getShape(ItemStack stack) {
         var tag = getTag(stack);
-        return tag.contains("BrushShape") ? tag.getInt("BrushShape") : SHAPE_CIRCLE;
+        int shape = tag.contains("BrushShape") ? tag.getInt("BrushShape") : SHAPE_CIRCLE;
+        if (shape < 0 || shape > 2) return SHAPE_SQUARE;
+        return shape;
     }
 
     public static void setShape(ItemStack stack, int shape) {
@@ -58,7 +60,7 @@ public class BrushItem extends Item {
         super.appendHoverText(stack, context, tooltip, type);
     }
 
-    private static String getShapeName(int shape) {
+    public static String getShapeName(int shape) {
         return switch (shape) {
             case SHAPE_CIRCLE -> "Circle";
             case SHAPE_ROUNDED -> "Rounded";

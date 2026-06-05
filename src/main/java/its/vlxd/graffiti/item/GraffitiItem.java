@@ -110,7 +110,7 @@ public class GraffitiItem extends Item {
         super.appendHoverText(stack, context, tooltip, type);
     }
 
-    private static String getShapeName(int shape) {
+    public static String getShapeName(int shape) {
         return switch (shape) {
             case SHAPE_CIRCLE -> "Circle";
             case SHAPE_ROUNDED -> "Rounded";
