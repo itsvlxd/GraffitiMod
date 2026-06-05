@@ -34,6 +34,7 @@ public class GraffitiCommands {
                 .then(Commands.literal("version")
                         .executes(GraffitiCommands::version))
                 .then(Commands.literal("debug")
+                        .requires(src -> src.hasPermission(2))
                         .executes(GraffitiCommands::debug))
                 .then(Commands.literal("clean")
                         .requires(src -> src.hasPermission(2))
@@ -101,18 +102,26 @@ public class GraffitiCommands {
         var player = source.getPlayer();
         if (player == null) return 0;
 
+        if (GraffitiMod.SERVER_CACHE.isEmpty()) {
+            source.sendSuccess(() -> Component.literal(PREFIX)
+                    .append(Component.literal("There is no graffiti to clean.").withStyle(ChatFormatting.GRAY)), false);
+            return 1;
+        }
+
         PENDING_CONFIRMS.put(player.getUUID(), System.currentTimeMillis());
 
-        source.sendSuccess(() -> Component.literal("§6§lGraffitiMod §4§l┃ §c§lWARNING"), false);
         source.sendSuccess(() -> Component.literal(PREFIX)
-                .append(Component.literal("This will §lDELETE§r§7 all graffiti on the entire server!")
-                        .withStyle(ChatFormatting.RED)), false);
+                .append(Component.literal("This will ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal("DELETE").withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
+                .append(Component.literal(" all graffiti on the entire server!").withStyle(ChatFormatting.GRAY)), false);
         source.sendSuccess(() -> Component.literal(PREFIX)
-                .append(Component.literal("This action §lCANNOT§r§7 be undone!")
-                        .withStyle(ChatFormatting.RED)), false);
+                .append(Component.literal("This action ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal("CANNOT").withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
+                .append(Component.literal(" be undone!").withStyle(ChatFormatting.GRAY)), false);
         source.sendSuccess(() -> Component.literal(PREFIX)
-                .append(Component.literal("Type §6/graffiti confirm§7 within 30 seconds to proceed.")
-                        .withStyle(ChatFormatting.GRAY)), false);
+                .append(Component.literal("Type ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal("/graffiti confirm").withStyle(ChatFormatting.GOLD))
+                .append(Component.literal(" within 30 seconds to proceed.").withStyle(ChatFormatting.GRAY)), false);
 
         return 1;
     }
@@ -126,8 +135,9 @@ public class GraffitiCommands {
         Long time = PENDING_CONFIRMS.get(uuid);
         if (time == null || System.currentTimeMillis() - time > CONFIRM_TIMEOUT) {
             source.sendSuccess(() -> Component.literal(PREFIX)
-                    .append(Component.literal("No pending clean action. Use §6/graffiti clean§7 first.")
-                            .withStyle(ChatFormatting.RED)), false);
+                    .append(Component.literal("No pending clean action. Use ").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal("/graffiti clean").withStyle(ChatFormatting.GOLD))
+                    .append(Component.literal(" first.").withStyle(ChatFormatting.GRAY)), false);
             return 0;
         }
 
@@ -164,8 +174,9 @@ public class GraffitiCommands {
         }
 
         source.sendSuccess(() -> Component.literal(PREFIX)
-                .append(Component.literal("All graffiti has been §lCLEANED§r§7 from the server!")
-                        .withStyle(ChatFormatting.GREEN)), true);
+                .append(Component.literal("All graffiti has been ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal("CLEANED").withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD))
+                .append(Component.literal(" from the server!").withStyle(ChatFormatting.GRAY)), true);
 
         return 1;
     }
