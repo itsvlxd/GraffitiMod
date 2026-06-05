@@ -8,6 +8,7 @@ import its.vlxd.graffiti.config.GraffitiConfig;
 import its.vlxd.graffiti.item.BrushItem;
 import its.vlxd.graffiti.item.GraffitiItem;
 import its.vlxd.graffiti.network.CleanPayload;
+import its.vlxd.graffiti.network.DebugPayload;
 import its.vlxd.graffiti.network.FaceSyncPayload;
 import its.vlxd.graffiti.network.PaintPayload;
 import its.vlxd.graffiti.network.RemoveGraffitiPayload;
@@ -248,43 +249,6 @@ public class ClientHandler {
             int brushRad = BrushItem.getSize(held) - 1;
             int shape = BrushItem.getShape(held);
             PacketDistributor.sendToServer(new CleanPayload(pos, side, u, v, brushRad, shape));
-
-            long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
-            var chunk = GraffitiRenderer.GRAFFITI_CACHE.get(ck);
-            if (chunk != null) {
-                var faces = chunk.get(pos.asLong());
-                if (faces != null) {
-                    int[][] grid = faces.get(side);
-                    if (grid != null) {
-                        int alphaReduction = held.is(GraffitiMod.WET_BRUSH.get()) ? 51 : 16;
-                        for (int du = -brushRad; du <= brushRad; du++) {
-                            for (int dv = -brushRad; dv <= brushRad; dv++) {
-                                boolean inBounds = du >= -brushRad && du <= brushRad && dv >= -brushRad && dv <= brushRad;
-                                if (!inBounds) continue;
-                                boolean paint = switch (brushRad <= 0 ? BrushItem.SHAPE_SQUARE : shape) {
-                                    case BrushItem.SHAPE_CIRCLE -> du * du + dv * dv <= brushRad * brushRad;
-                                    case BrushItem.SHAPE_ROUNDED -> {
-                                        int cr = Math.max(1, brushRad / 2);
-                                        if (Math.abs(du) <= brushRad - cr || Math.abs(dv) <= brushRad - cr) yield true;
-                                        yield (Math.abs(du) - (brushRad - cr)) * (Math.abs(du) - (brushRad - cr)) + (Math.abs(dv) - (brushRad - cr)) * (Math.abs(dv) - (brushRad - cr)) <= cr * cr;
-                                    }
-                                    default -> true;
-                                };
-                                if (!paint) continue;
-                                int tu = u + du, tv = v + dv;
-                                if (tu < 0 || tu >= 16 || tv < 0 || tv >= 16) continue;
-                                int color = grid[tu][tv];
-                                if (color == 0) continue;
-                                int alpha = (color >> 24) & 0xFF;
-                                alpha -= alphaReduction;
-                                grid[tu][tv] = alpha <= 0 ? 0 : (alpha << 24) | (color & 0xFFFFFF);
-                            }
-                        }
-                        GraffitiRenderer.invalidateFace(ck, pos.asLong(), side);
-                        GraffitiRenderer.queueAsyncSave();
-                    }
-                }
-            }
         } else {
             ClientItemHandler.handleAttack(hit);
         }
@@ -340,6 +304,12 @@ public class ClientHandler {
                 GraffitiRenderer.addPixelToCache(p);
             }
             GraffitiMod.LOGGER.info("Loaded {} pixels", payload.allPixels().size());
+        });
+    }
+
+    public static void handleDebugPacket(DebugPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            GraffitiRenderer.setDebugMode(payload.enabled());
         });
     }
 }

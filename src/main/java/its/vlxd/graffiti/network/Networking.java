@@ -119,6 +119,12 @@ public class Networking {
                 SprayPaintPayload.CODEC,
                 (payload, context) -> handleSprayPaint(payload, context)
         );
+
+        registrar.playToClient(
+                DebugPayload.TYPE,
+                DebugPayload.CODEC,
+                (payload, context) -> dispatchClientDebug(payload, context)
+        );
     }
 
     private static void dispatchClientRemove(RemoveGraffitiPayload payload, IPayloadContext context) {
@@ -191,6 +197,14 @@ public class Networking {
         try {
             Class.forName("its.vlxd.graffiti.client.ClientHandler")
                     .getMethod("handleSyncPacket", SyncGraffitiPayload.class, IPayloadContext.class)
+                    .invoke(null, payload, context);
+        } catch (Exception ignored) {}
+    }
+
+    private static void dispatchClientDebug(DebugPayload payload, IPayloadContext context) {
+        try {
+            Class.forName("its.vlxd.graffiti.client.ClientHandler")
+                    .getMethod("handleDebugPacket", DebugPayload.class, IPayloadContext.class)
                     .invoke(null, payload, context);
         } catch (Exception ignored) {}
     }

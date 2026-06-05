@@ -36,8 +36,14 @@ public class GraffitiRenderer {
 
     private static String lastWorldName = "";
     private static volatile boolean isSaving = false;
-    private static final ResourceLocation WHITE_TEXTURE = ResourceLocation.parse("graffiti:textures/misc/white.png");
+    private static ResourceLocation WHITE_TEXTURE = ResourceLocation.parse("graffiti:textures/misc/white.png");
     private static Frustum frustum;
+    private static boolean debugMode = false;
+
+    public static void setDebugMode(boolean enabled) {
+        debugMode = enabled;
+        BAKED_CACHE.clear();
+    }
 
     public static class BakedQuad {
         public final int u, v, w, h, color;
@@ -206,7 +212,7 @@ public class GraffitiRenderer {
                         for (int dx = 0; dx < w; dx++) visited[u + dx][v + dy] = true;
                     }
 
-                    quads.add(new BakedQuad(u, v, w, h, color, currentDepth));
+                    quads.add(new BakedQuad(u, v, w, h, debugMode ? ((u * 31 + v * 17) * 12345) | 0xFF000000 : color, currentDepth));
                 }
             }
         }

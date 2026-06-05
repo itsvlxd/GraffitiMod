@@ -36,6 +36,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -89,7 +90,7 @@ public class GraffitiMod {
     public static final Map<java.util.UUID, Deque<ClipboardEntry>> PLAYER_CLIPBOARD = new HashMap<>();
     private static final long DESATURATION_INTERVAL = 120_000L; // 5 in-game days
     private long lastDesatTick = 0;
-    private static final Map<UUID, Integer> SUBMERGED_BRUSHES = new HashMap<>();
+    public static final Map<UUID, Integer> SUBMERGED_BRUSHES = new HashMap<>();
 
     public GraffitiMod(IEventBus modBus) {
         TABS.register("graffiti_group", () -> CreativeModeTab.builder()
@@ -118,6 +119,11 @@ public class GraffitiMod {
         bus.addListener(this::onBlockPlace);
         bus.addListener(this::onEntityJoinLevel);
         bus.addListener(this::onItemCrafted);
+        bus.addListener(this::registerCommands);
+    }
+
+    private void registerCommands(RegisterCommandsEvent event) {
+        its.vlxd.graffiti.command.GraffitiCommands.register(event.getDispatcher());
     }
 
     private void addToVanillaTabs(BuildCreativeModeTabContentsEvent event) {
