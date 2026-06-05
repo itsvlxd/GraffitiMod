@@ -255,11 +255,7 @@ public class GraffitiMod {
             })));
 
             if (!syncData.isEmpty()) {
-                int batchSize = 1000; 
-                for (int i = 0; i < syncData.size(); i += batchSize) {
-                    List<PaintPayload> subList = syncData.subList(i, Math.min(i + batchSize, syncData.size()));
-                    PacketDistributor.sendToPlayer(sp, new SyncGraffitiPayload(new ArrayList<>(subList)));
-                }
+                PacketDistributor.sendToPlayer(sp, new SyncGraffitiPayload(syncData));
             }
         });
     }

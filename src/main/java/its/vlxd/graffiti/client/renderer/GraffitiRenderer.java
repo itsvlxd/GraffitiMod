@@ -36,6 +36,7 @@ public class GraffitiRenderer {
 
     private static String lastWorldName = "";
     private static volatile boolean isSaving = false;
+    private static volatile boolean saveQueued = false;
     private static ResourceLocation WHITE_TEXTURE = ResourceLocation.parse("graffiti:textures/misc/white.png");
     private static Frustum frustum;
     private static boolean debugMode = false;
@@ -220,11 +221,23 @@ public class GraffitiRenderer {
     }
 
     public static void queueAsyncSave() {
-        if (isSaving || lastWorldName.isEmpty()) return;
+        if (lastWorldName.isEmpty()) return;
+        if (isSaving) {
+            saveQueued = true;
+            return;
+        }
         isSaving = true;
         CompletableFuture.runAsync(() -> {
             save();
             isSaving = false;
+            if (saveQueued) {
+                saveQueued = false;
+                isSaving = true;
+                CompletableFuture.runAsync(() -> {
+                    save();
+                    isSaving = false;
+                });
+            }
         });
     }
 
@@ -378,9 +391,14 @@ public class GraffitiRenderer {
     private static void checkAndLoadWorldData() {
         var client = Minecraft.getInstance();
         if (client.level == null) return;
-        String current = client.isLocalServer() && client.getSingleplayerServer() != null
-                ? client.getSingleplayerServer().getWorldData().getLevelName()
-                : "mp_server";
+        String current;
+        if (client.isLocalServer() && client.getSingleplayerServer() != null) {
+            current = client.getSingleplayerServer().getWorldData().getLevelName();
+        } else if (client.getConnection() != null && client.getConnection().getServerData() != null) {
+            current = client.getConnection().getServerData().ip;
+        } else {
+            current = "mp_server";
+        }
         if (!current.equals(lastWorldName)) {
             lastWorldName = current;
             load();
