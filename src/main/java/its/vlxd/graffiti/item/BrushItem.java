@@ -52,9 +52,11 @@ public class BrushItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag type) {
-        int remaining = stack.getMaxDamage() - stack.getDamageValue();
-        tooltip.add(Component.literal("Durability: " + remaining + "/" + stack.getMaxDamage())
-                .withStyle(net.minecraft.ChatFormatting.GRAY));
+        if (stack.getMaxDamage() > 0) {
+            int remaining = stack.getMaxDamage() - stack.getDamageValue();
+            tooltip.add(Component.literal("Durability: " + remaining + "/" + stack.getMaxDamage())
+                    .withStyle(net.minecraft.ChatFormatting.GRAY));
+        }
         tooltip.add(Component.literal("Size: " + getSize(stack) + " Shape: " + getShapeName(getShape(stack)))
                 .withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
         super.appendHoverText(stack, context, tooltip, type);

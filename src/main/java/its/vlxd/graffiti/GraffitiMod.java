@@ -11,6 +11,7 @@ import its.vlxd.graffiti.network.RemoveGraffitiPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -308,8 +309,10 @@ public class GraffitiMod {
                     entry.setValue(currentTick);
                 } else if (currentTick - entry.getValue() >= 40) {
                     ItemStack wet = new ItemStack(WET_BRUSH.get());
-                    BrushItem.setSize(wet, BrushItem.getSize(ie.getItem()));
-                    BrushItem.setShape(wet, BrushItem.getShape(ie.getItem()));
+                    var srcData = ie.getItem().get(DataComponents.CUSTOM_DATA);
+                    if (srcData != null) {
+                        wet.set(DataComponents.CUSTOM_DATA, srcData);
+                    }
                     ie.setItem(wet);
                     ((ServerLevel) ie.level()).sendParticles(
                             ParticleTypes.BUBBLE, ie.getX(), ie.getY() + 0.5, ie.getZ(),

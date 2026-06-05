@@ -7,9 +7,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
-// FIX: brush doesnt save its settings when thron
-// into water to become wet
-
 public class BrushScreen extends Screen {
     private static final int W = 150, H = 80;
 

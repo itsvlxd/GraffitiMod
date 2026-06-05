@@ -305,15 +305,13 @@ public class Networking {
             }
 
             if (changed) {
-                if (!player.isCreative()) {
+                if (!player.isCreative() && held.is(GraffitiMod.WET_BRUSH.get())) {
                     held.setDamageValue(held.getDamageValue() + 1);
                     if (held.getDamageValue() >= held.getMaxDamage()) {
-                        if (held.is(GraffitiMod.WET_BRUSH.get())) {
-                            ItemStack dry = new ItemStack(GraffitiMod.BRUSH.get());
-                            BrushItem.setSize(dry, BrushItem.getSize(held));
-                            BrushItem.setShape(dry, BrushItem.getShape(held));
-                            player.setItemInHand(InteractionHand.MAIN_HAND, dry);
-                        }
+                        ItemStack dry = new ItemStack(GraffitiMod.BRUSH.get());
+                        BrushItem.setSize(dry, BrushItem.getSize(held));
+                        BrushItem.setShape(dry, BrushItem.getShape(held));
+                        player.setItemInHand(InteractionHand.MAIN_HAND, dry);
                         player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
                                 SoundEvents.ITEM_BREAK, SoundSource.PLAYERS, 1.0f, 1.0f);
                     }
