@@ -7,12 +7,11 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
-// FIX: fix the menu placement
 // FIX: brush doesnt save its settings when thron
 // into water to become wet
 
 public class BrushScreen extends Screen {
-    private static final int W = 200, H = 95;
+    private static final int W = 150, H = 80;
 
     private final ItemStack stack;
     private int px, py;
@@ -36,26 +35,23 @@ public class BrushScreen extends Screen {
         brushSize = BrushItem.getSize(stack);
         brushShape = BrushItem.getShape(stack);
 
-        int lx = px + 10;
-        int cx = px + 50;
-
         sizeDown = Button.builder(Component.literal("-"), b -> {
             brushSize = SIZES[Math.max(0, idx(SIZES, brushSize) - 1)];
             BrushItem.setSize(stack, brushSize);
-        }).bounds(cx, py + 30, 18, 16).build();
+        }).bounds(px + 76, py + 30, 16, 16).build();
         addRenderableWidget(sizeDown);
 
         sizeUp = Button.builder(Component.literal("+"), b -> {
             brushSize = SIZES[Math.min(SIZES.length - 1, idx(SIZES, brushSize) + 1)];
             BrushItem.setSize(stack, brushSize);
-        }).bounds(cx + 56, py + 30, 18, 16).build();
+        }).bounds(px + 122, py + 30, 16, 16).build();
         addRenderableWidget(sizeUp);
 
         shapeBtn = Button.builder(Component.literal(SHAPES[brushShape]), b -> {
             brushShape = (brushShape + 1) % 3;
             shapeBtn.setMessage(Component.literal(SHAPES[brushShape]));
             BrushItem.setShape(stack, brushShape);
-        }).bounds(cx, py + 54, 74, 16).build();
+        }).bounds(px + 76, py + 52, 62, 16).build();
         addRenderableWidget(shapeBtn);
     }
 
@@ -71,14 +67,15 @@ public class BrushScreen extends Screen {
         ctx.drawString(font, title, px + (W - font.width(title)) / 2, py + 6, 0xCCCCCC);
         ctx.fill(px + 4, py + 17, px + W - 4, py + 18, 0xFF444444);
 
-        int lx = px + 10;
-        int cx = px + 50;
+        int lx = px + 12;
 
-        ctx.drawString(font, Component.literal("Size:"), lx, py + 31, 0xAAAAAA);
+        ctx.drawString(font, Component.literal("Size:"), lx, py + 34, 0xAAAAAA);
+        ctx.drawString(font, Component.literal("Shape:"), lx, py + 56, 0xAAAAAA);
+
         String sz = String.valueOf(brushSize);
-        ctx.drawString(font, Component.literal(sz), cx + 24, py + 31, 0xFFFFFF);
-
-        ctx.drawString(font, Component.literal("Shape:"), lx, py + 55, 0xAAAAAA);
+        int textWidth = font.width(sz);
+        int centeredNumberX = (px + 92) + ((30 - textWidth) / 2);
+        ctx.drawString(font, Component.literal(sz), centeredNumberX, py + 34, 0xFFFFFF);
 
         super.render(ctx, mx, my, dt);
     }

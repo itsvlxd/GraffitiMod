@@ -111,7 +111,8 @@ public class ClientItemHandler {
     }
 
     private static boolean shouldPaint(int x, int y, int rad, int shape, Random rng) {
-        return switch (shape) {
+        int es = rad <= 0 ? GraffitiItem.SHAPE_SQUARE : shape;
+        return switch (es) {
             case GraffitiItem.SHAPE_SQUARE -> true;
             case GraffitiItem.SHAPE_CIRCLE -> x * x + y * y <= rad * rad;
             case GraffitiItem.SHAPE_ROUNDED -> isRounded(x, y, rad);

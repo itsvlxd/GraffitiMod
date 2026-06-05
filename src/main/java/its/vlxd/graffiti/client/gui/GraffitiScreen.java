@@ -17,8 +17,6 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.awt.Color;
 
-// FIX: add fallback to sqaure for any brush if the size is 1
-
 public class GraffitiScreen extends Screen {
     private static final int PS = 100;
     private static final int W = 260, H = 185;
@@ -142,7 +140,7 @@ public class GraffitiScreen extends Screen {
         ctx.fill(px + 4, py + 18, px + W - 4, py + 19, 0xFF444444);
 
         if (isLocked) {
-            ctx.drawString(font, Component.literal("Color Locked"), px + 117 + 4, py + 26 + 12, 0xFF5555);
+            ctx.drawString(font, Component.literal("Color Locked"), px + 120 + 4, py + 26 + 12, 0xFF5555);
         }
 
         int ppX = px + 10, ppY = py + 26;

@@ -159,12 +159,31 @@ public class ClientHandler {
         if (hasItem) {
             int color = GraffitiItem.getColor(client.player.getMainHandItem());
             String hex = String.format("#%06X", color & 0xFFFFFF);
+            int shape = GraffitiItem.getBrushShape(client.player.getMainHandItem());
+            String shapeName = GraffitiItem.getShapeName(shape);
 
             Component msg = Component.literal("Color: ")
                     .withStyle(ChatFormatting.GRAY)
                     .append(Component.literal(hex).withStyle(s -> s.withColor(color & 0xFFFFFF)))
+                    .append(Component.literal("  Shape: ").withStyle(ChatFormatting.GRAY))
+                    .append(GraffitiHUD.getColoredShapeName(shapeName, shape))
                     .append(Component.literal("  Mode: ").withStyle(ChatFormatting.GRAY))
                     .append(GraffitiHUD.getColoredToolName());
+
+            client.player.displayClientMessage(msg, true);
+        }
+
+        boolean isBrush = held.is(GraffitiMod.BRUSH.get()) || held.is(GraffitiMod.WET_BRUSH.get());
+        if (!hasItem && isBrush) {
+            int size = BrushItem.getSize(client.player.getMainHandItem());
+            int shape = BrushItem.getShape(client.player.getMainHandItem());
+            String shapeName = BrushItem.getShapeName(shape);
+
+            Component msg = Component.literal("Size: ")
+                    .withStyle(ChatFormatting.GRAY)
+                    .append(Component.literal(String.valueOf(size)).withStyle(ChatFormatting.WHITE))
+                    .append(Component.literal("  Shape: ").withStyle(ChatFormatting.GRAY))
+                    .append(GraffitiHUD.getColoredShapeName(shapeName, shape));
 
             client.player.displayClientMessage(msg, true);
         }
@@ -242,7 +261,7 @@ public class ClientHandler {
                             for (int dv = -brushRad; dv <= brushRad; dv++) {
                                 boolean inBounds = du >= -brushRad && du <= brushRad && dv >= -brushRad && dv <= brushRad;
                                 if (!inBounds) continue;
-                                boolean paint = switch (shape) {
+                                boolean paint = switch (brushRad <= 0 ? BrushItem.SHAPE_SQUARE : shape) {
                                     case BrushItem.SHAPE_CIRCLE -> du * du + dv * dv <= brushRad * brushRad;
                                     case BrushItem.SHAPE_ROUNDED -> {
                                         int cr = Math.max(1, brushRad / 2);
