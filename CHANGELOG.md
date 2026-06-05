@@ -1,3 +1,28 @@
+# [1.3.0](https://github.com/itsvlxd/GraffitiMod/compare/v1.2.0...v1.3.0) (2026-06-05)
+
+
+### Bug Fixes
+
+* **brush_size:** add proper fallback to brush shape based on size ([93d86f4](https://github.com/itsvlxd/GraffitiMod/commit/93d86f41798c0a207822aa60b9af4e95271bcdc4))
+* **brush:** fix brush keeping settings after getting wet ([cd827f2](https://github.com/itsvlxd/GraffitiMod/commit/cd827f2bf7fbd0d7ba7c1b13ad2554d016cbca6e))
+* **cache:** fix race conditiion in server cache loading making the graffiti glitch out ([51499ad](https://github.com/itsvlxd/GraffitiMod/commit/51499ad7eb42003bdd4391d02922915cae3f21c9))
+* **renderr:** improve the rendere to properly store graffiti data per server ([2dc5fea](https://github.com/itsvlxd/GraffitiMod/commit/2dc5feaa69fd22ca5a3ee3c8f31f04399a97fc4b))
+
+
+### Features
+
+* **brush:** add durability to brushes and settings menu ([7b92887](https://github.com/itsvlxd/GraffitiMod/commit/7b9288747aeb80bb7bf70ce317af8ab62dc39157))
+* **commands:** add graffiti commands, version clean and debug ([e1b342f](https://github.com/itsvlxd/GraffitiMod/commit/e1b342f913029cbea2ee2a08d4e107a943cf97ce))
+* **commands:** add graffiti.admin.clean permission for debug and improve the message style ([12be663](https://github.com/itsvlxd/GraffitiMod/commit/12be663858548d6987366e78dfe8e29a567afde4))
+* **gui:** remove the custom hotbat gui and add the mode settings inside the graffiti editor ([dd0d153](https://github.com/itsvlxd/GraffitiMod/commit/dd0d153273c96f03cd7e13f91d1d9554209523cc))
+* **hud:** add hud for brush and fix brush settings menu ([ee0a79b](https://github.com/itsvlxd/GraffitiMod/commit/ee0a79b18e1539bf222e7f04721345d0b4e393a6))
+* **sound:** make the equip sound be server sound only ([fc03742](https://github.com/itsvlxd/GraffitiMod/commit/fc037420ad1ed140ae76a40891e5322a0d7db0a8))
+
+
+### Performance Improvements
+
+* **render:** improve renderer performance ([6d1a310](https://github.com/itsvlxd/GraffitiMod/commit/6d1a310f8d33de4322bab135c40ac492386e166e))
+
 # [1.2.0](https://github.com/itsvlxd/GraffitiMod/compare/v1.1.2...v1.2.0) (2026-06-04)
 
 
