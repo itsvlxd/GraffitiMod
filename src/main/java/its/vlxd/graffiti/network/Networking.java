@@ -3,6 +3,7 @@ package its.vlxd.graffiti.network;
 import its.vlxd.graffiti.GraffitiMod;
 import its.vlxd.graffiti.item.BrushItem;
 import its.vlxd.graffiti.item.GraffitiItem;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -17,6 +18,7 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.handling.IPayloadHandler;
 
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -24,6 +26,8 @@ import java.util.UUID;
 public class Networking {
     private static final Map<UUID, Integer> SOUND_COOLDOWN = new HashMap<>();
     private static final int SOUND_INTERVAL = 5;
+    private static final double SERVER_MAX_REACH = 20.0;
+    private static final double SERVER_MAX_REACH_SQ = SERVER_MAX_REACH * SERVER_MAX_REACH;
 
     private static boolean tryPlaySound(Player player, ServerLevel level, double x, double y, double z, SoundEvent sound, float pitch) {
         int tick = player.getServer().getTickCount();
@@ -151,12 +155,13 @@ public class Networking {
             if (level == null) return;
 
             BlockPos pos = payload.pos();
+            String dim = GraffitiMod.dimKey(level);
             long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             long posL = pos.asLong();
 
             int[][] grid = payload.redo()
-                    ? GraffitiMod.handleRedo(ck, posL, payload.side())
-                    : GraffitiMod.handleUndo(ck, posL, payload.side());
+                    ? GraffitiMod.handleRedo(dim, ck, posL, payload.side())
+                    : GraffitiMod.handleUndo(dim, ck, posL, payload.side());
 
             if (grid != null) {
                 GraffitiMod.broadcastFace(pos, payload.side(), grid, level);
@@ -166,22 +171,28 @@ public class Networking {
 
     private static void handleSnapshotServer(SnapshotPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
+            var player = context.player();
+            if (player == null) return;
+
             BlockPos pos = payload.pos();
+            String dim = GraffitiMod.dimKey(player.level());
             long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             long posL = pos.asLong();
 
-            var tickMap = GraffitiMod.LAST_PAINT_TICK;
-            var ckMap = tickMap.get(ck);
+            var dimTicks = GraffitiMod.LAST_PAINT_TICK.get(dim);
+            if (dimTicks == null) return;
+            var ckMap = dimTicks.get(ck);
             if (ckMap == null) return;
             var faceMap = ckMap.get(posL);
             if (faceMap == null) return;
             Integer lastTick = faceMap.get(payload.side());
             if (lastTick == null) return;
 
-            GraffitiMod.saveSnapshot(ck, posL, payload.side());
+            GraffitiMod.saveSnapshot(dim, ck, posL, payload.side());
             faceMap.remove(payload.side());
             if (faceMap.isEmpty()) ckMap.remove(posL);
-            if (ckMap.isEmpty()) tickMap.remove(ck);
+            if (ckMap.isEmpty()) dimTicks.remove(ck);
+            if (dimTicks.isEmpty()) GraffitiMod.LAST_PAINT_TICK.remove(dim);
         });
     }
 
@@ -215,15 +226,16 @@ public class Networking {
             if (player == null) return;
 
             BlockPos pos = payload.pos();
+            if (player.distanceToSqr(Vec3.atCenterOf(pos)) > SERVER_MAX_REACH_SQ) return;
+
+            String dim = GraffitiMod.dimKey(player.level());
             long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             long posL = pos.asLong();
 
-            var chunk = GraffitiMod.SERVER_CACHE
-                    .computeIfAbsent(ck, k -> new HashMap<>());
-            var faces = chunk
-                    .computeIfAbsent(posL, k -> new java.util.EnumMap<>(net.minecraft.core.Direction.class));
-            int[][] grid = faces
-                    .computeIfAbsent(payload.side(), k -> new int[16][16]);
+            var dimCache = GraffitiMod.SERVER_CACHE.computeIfAbsent(dim, k -> new HashMap<>());
+            var chunk = dimCache.computeIfAbsent(ck, k -> new HashMap<>());
+            var faces = chunk.computeIfAbsent(posL, k -> new EnumMap<>(Direction.class));
+            int[][] grid = faces.computeIfAbsent(payload.side(), k -> new int[16][16]);
 
             int currentColor = grid[payload.u()][payload.v()];
             boolean sameColor = currentColor == payload.color();
@@ -239,11 +251,11 @@ public class Networking {
             }
 
             grid[payload.u()][payload.v()] = payload.color();
-            GraffitiMod.discardFutureHistory(ck, posL, payload.side());
+            GraffitiMod.discardFutureHistory(dim, ck, posL, payload.side());
 
             var server = player.getServer();
             if (server != null) {
-                GraffitiMod.recordPaintTick(ck, posL, payload.side(), server.getTickCount());
+                GraffitiMod.recordPaintTick(dim, ck, posL, payload.side(), server.getTickCount());
             }
 
             for (var otherPlayer : player.getServer().getLevel(player.level().dimension()).players()) {
@@ -272,18 +284,23 @@ public class Networking {
             if (!player.isCreative() && held.is(GraffitiMod.WET_BRUSH.get()) && held.getDamageValue() >= held.getMaxDamage()) return;
 
             BlockPos pos = payload.pos();
+            if (player.distanceToSqr(Vec3.atCenterOf(pos)) > SERVER_MAX_REACH_SQ) return;
+
             Direction side = payload.side();
+            String dim = GraffitiMod.dimKey(player.level());
             long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             long posL = pos.asLong();
 
-            var chunk = GraffitiMod.SERVER_CACHE.get(ck);
+            var dimCache = GraffitiMod.SERVER_CACHE.get(dim);
+            if (dimCache == null) return;
+            var chunk = dimCache.get(ck);
             if (chunk == null) return;
             var faces = chunk.get(posL);
             if (faces == null) return;
             int[][] grid = faces.get(side);
             if (grid == null) return;
 
-            GraffitiMod.saveSnapshot(ck, posL, side);
+            GraffitiMod.saveSnapshot(dim, ck, posL, side);
 
             int radius = payload.radius();
             int shape = payload.shape();

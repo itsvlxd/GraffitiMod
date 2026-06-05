@@ -62,6 +62,7 @@ public class GraffitiMod {
     public static final String MOD_ID = "graffiti";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
     private static final int SAVE_MAGIC = 0x47724166;
+    private static final int SAVE_FORMAT_DIMENSIONS = -2;
 
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(Registries.ITEM, MOD_ID);
     public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
@@ -81,16 +82,24 @@ public class GraffitiMod {
     public static final DeferredHolder<SoundEvent, SoundEvent> SPRAY_CAN_PAINT =
             SOUND_EVENTS.register("item.spray_can_paint", () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "item.spray_can_paint")));
 
-    public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, int[][]>>> SERVER_CACHE = new HashMap<>();
+    public static final Map<String, Map<Long, Map<Long, Map<Direction, int[][]>>>> SERVER_CACHE = new HashMap<>();
 
-    public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, List<int[][]>>>> UNDO_HISTORY = new HashMap<>();
-    public static final Map<Long, Map<Long, Map<net.minecraft.core.Direction, Integer>>> LAST_PAINT_TICK = new HashMap<>();
+    public static final Map<String, Map<Long, Map<Long, Map<Direction, List<int[][]>>>>> UNDO_HISTORY = new HashMap<>();
+    public static final Map<String, Map<Long, Map<Long, Map<Direction, Integer>>>> LAST_PAINT_TICK = new HashMap<>();
     private static final int IDLE_TICKS = 20;
     private record ClipboardEntry(ResourceLocation blockId, Map<Direction, int[][]> faces) {}
     public static final Map<java.util.UUID, Deque<ClipboardEntry>> PLAYER_CLIPBOARD = new HashMap<>();
     private static final long DESATURATION_INTERVAL = 120_000L; // 5 in-game days
     private long lastDesatTick = 0;
     public static final Map<UUID, Integer> SUBMERGED_BRUSHES = new HashMap<>();
+
+    public static String dimKey(ResourceKey<Level> dim) {
+        return dim.location().toString();
+    }
+
+    public static String dimKey(Level level) {
+        return level.dimension().location().toString();
+    }
 
     public GraffitiMod(IEventBus modBus) {
         TABS.register("graffiti_group", () -> CreativeModeTab.builder()
@@ -139,54 +148,93 @@ public class GraffitiMod {
         UNDO_HISTORY.clear();
         LAST_PAINT_TICK.clear();
         File file = new File(event.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(), "graffiti.bin");
-        if (!file.exists()) return;
-
-        try (DataInputStream in = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(file))))) {
-            int magic = in.readInt();
-            if (magic == SAVE_MAGIC) {
-                int chunkCount = in.readInt();
-                for (int c = 0; c < chunkCount; c++) {
-                    long ck = in.readLong();
-                    int blockCount = in.readInt();
-                    var blocks = new HashMap<Long, Map<net.minecraft.core.Direction, int[][]>>();
-                    for (int b = 0; b < blockCount; b++) {
-                        long pos = in.readLong();
-                        int faceCount = in.readInt();
-                        var faces = new EnumMap<net.minecraft.core.Direction, int[][]>(net.minecraft.core.Direction.class);
-                        for (int f = 0; f < faceCount; f++) {
-                            var side = net.minecraft.core.Direction.from3DDataValue(in.readByte());
-                            int[][] grid = new int[16][16];
-                            int pixelCount = in.readInt();
-                            for (int p = 0; p < pixelCount; p++) {
-                                int u = in.readUnsignedByte();
-                                int v = in.readUnsignedByte();
-                                int color = in.readInt();
-                                if (u < 16 && v < 16) grid[u][v] = color;
+        if (file.exists()) {
+            try (DataInputStream in = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(file))))) {
+                int magic = in.readInt();
+                if (magic == SAVE_MAGIC) {
+                    int val = in.readInt();
+                    if (val == SAVE_FORMAT_DIMENSIONS) {
+                        int dimCount = in.readInt();
+                        for (int d = 0; d < dimCount; d++) {
+                            String dimName = in.readUTF();
+                            int chunkCount = in.readInt();
+                            var chunks = new HashMap<Long, Map<Long, Map<Direction, int[][]>>>();
+                            for (int c = 0; c < chunkCount; c++) {
+                                long ck = in.readLong();
+                                int blockCount = in.readInt();
+                                var blocks = new HashMap<Long, Map<Direction, int[][]>>();
+                                for (int b = 0; b < blockCount; b++) {
+                                    long pos = in.readLong();
+                                    int faceCount = in.readInt();
+                                    var faces = new EnumMap<Direction, int[][]>(Direction.class);
+                                    for (int f = 0; f < faceCount; f++) {
+                                        var side = Direction.from3DDataValue(in.readByte());
+                                        int[][] grid = new int[16][16];
+                                        int pixelCount = in.readInt();
+                                        for (int p = 0; p < pixelCount; p++) {
+                                            int u = in.readUnsignedByte();
+                                            int v = in.readUnsignedByte();
+                                            int color = in.readInt();
+                                            if (u < 16 && v < 16) grid[u][v] = color;
+                                        }
+                                        faces.put(side, grid);
+                                    }
+                                    blocks.put(pos, faces);
+                                }
+                                chunks.put(ck, blocks);
                             }
-                            faces.put(side, grid);
+                            SERVER_CACHE.put(dimName, chunks);
                         }
-                        blocks.put(pos, faces);
+                    } else {
+                        int chunkCount = val;
+                        var chunks = new HashMap<Long, Map<Long, Map<Direction, int[][]>>>();
+                        for (int c = 0; c < chunkCount; c++) {
+                            long ck = in.readLong();
+                            int blockCount = in.readInt();
+                            var blocks = new HashMap<Long, Map<Direction, int[][]>>();
+                            for (int b = 0; b < blockCount; b++) {
+                                long pos = in.readLong();
+                                int faceCount = in.readInt();
+                                var faces = new EnumMap<Direction, int[][]>(Direction.class);
+                                for (int f = 0; f < faceCount; f++) {
+                                    var side = Direction.from3DDataValue(in.readByte());
+                                    int[][] grid = new int[16][16];
+                                    int pixelCount = in.readInt();
+                                    for (int p = 0; p < pixelCount; p++) {
+                                        int u = in.readUnsignedByte();
+                                        int v = in.readUnsignedByte();
+                                        int color = in.readInt();
+                                        if (u < 16 && v < 16) grid[u][v] = color;
+                                    }
+                                    faces.put(side, grid);
+                                }
+                                blocks.put(pos, faces);
+                            }
+                            chunks.put(ck, blocks);
+                        }
+                        SERVER_CACHE.put("minecraft:overworld", chunks);
                     }
-                    SERVER_CACHE.put(ck, blocks);
-                }
-            } else {
-                int count = magic;
-                for (int i = 0; i < count; i++) {
-                    long pos = in.readLong();
-                    int sideId = in.readByte();
-                    int u = in.readUnsignedByte();
-                    int v = in.readUnsignedByte();
-                    int color = in.readInt();
-                    if (u < 16 && v < 16 && sideId >= 0 && sideId < 6) {
-                        long ck = ChunkPos.asLong(net.minecraft.core.BlockPos.of(pos).getX() >> 4, net.minecraft.core.BlockPos.of(pos).getZ() >> 4);
-                        SERVER_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
-                                .computeIfAbsent(pos, k -> new EnumMap<>(net.minecraft.core.Direction.class))
-                                .computeIfAbsent(net.minecraft.core.Direction.from3DDataValue(sideId), k -> new int[16][16])[u][v] = color;
+                } else {
+                    int count = magic;
+                    var chunks = new HashMap<Long, Map<Long, Map<Direction, int[][]>>>();
+                    for (int i = 0; i < count; i++) {
+                        long pos = in.readLong();
+                        int sideId = in.readByte();
+                        int u = in.readUnsignedByte();
+                        int v = in.readUnsignedByte();
+                        int color = in.readInt();
+                        if (u < 16 && v < 16 && sideId >= 0 && sideId < 6) {
+                            long ck = ChunkPos.asLong(BlockPos.of(pos).getX() >> 4, BlockPos.of(pos).getZ() >> 4);
+                            chunks.computeIfAbsent(ck, k -> new HashMap<>())
+                                    .computeIfAbsent(pos, k -> new EnumMap<>(Direction.class))
+                                    .computeIfAbsent(Direction.from3DDataValue(sideId), k -> new int[16][16])[u][v] = color;
+                        }
                     }
+                    if (!chunks.isEmpty()) SERVER_CACHE.put("minecraft:overworld", chunks);
                 }
+            } catch (Exception e) {
+                LOGGER.error("Failed to load graffiti data", e);
             }
-        } catch (Exception e) {
-            LOGGER.error("Failed to load graffiti data", e);
         }
 
         var level = event.getServer().overworld();
@@ -199,31 +247,37 @@ public class GraffitiMod {
         File file = new File(event.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(), "graffiti.bin");
         try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(new BufferedOutputStream(new FileOutputStream(file))))) {
             out.writeInt(SAVE_MAGIC);
+            out.writeInt(SAVE_FORMAT_DIMENSIONS);
             out.writeInt(SERVER_CACHE.size());
-            for (var chunkEntry : SERVER_CACHE.entrySet()) {
-                out.writeLong(chunkEntry.getKey());
-                var blocks = chunkEntry.getValue();
-                out.writeInt(blocks.size());
-                for (var blockEntry : blocks.entrySet()) {
-                    out.writeLong(blockEntry.getKey());
-                    var faces = blockEntry.getValue();
-                    out.writeInt(faces.size());
-                    for (var faceEntry : faces.entrySet()) {
-                        out.writeByte(faceEntry.getKey().get3DDataValue());
-                        int[][] grid = faceEntry.getValue();
-                        int pixelCount = 0;
-                        for (int u = 0; u < 16; u++) {
-                            for (int v = 0; v < 16; v++) {
-                                if (grid[u][v] != 0) pixelCount++;
+            for (var dimEntry : SERVER_CACHE.entrySet()) {
+                out.writeUTF(dimEntry.getKey());
+                var chunks = dimEntry.getValue();
+                out.writeInt(chunks.size());
+                for (var chunkEntry : chunks.entrySet()) {
+                    out.writeLong(chunkEntry.getKey());
+                    var blocks = chunkEntry.getValue();
+                    out.writeInt(blocks.size());
+                    for (var blockEntry : blocks.entrySet()) {
+                        out.writeLong(blockEntry.getKey());
+                        var faces = blockEntry.getValue();
+                        out.writeInt(faces.size());
+                        for (var faceEntry : faces.entrySet()) {
+                            out.writeByte(faceEntry.getKey().get3DDataValue());
+                            int[][] grid = faceEntry.getValue();
+                            int pixelCount = 0;
+                            for (int u = 0; u < 16; u++) {
+                                for (int v = 0; v < 16; v++) {
+                                    if (grid[u][v] != 0) pixelCount++;
+                                }
                             }
-                        }
-                        out.writeInt(pixelCount);
-                        for (int u = 0; u < 16; u++) {
-                            for (int v = 0; v < 16; v++) {
-                                if (grid[u][v] != 0) {
-                                    out.writeByte(u);
-                                    out.writeByte(v);
-                                    out.writeInt(grid[u][v]);
+                            out.writeInt(pixelCount);
+                            for (int u = 0; u < 16; u++) {
+                                for (int v = 0; v < 16; v++) {
+                                    if (grid[u][v] != 0) {
+                                        out.writeByte(u);
+                                        out.writeByte(v);
+                                        out.writeInt(grid[u][v]);
+                                    }
                                 }
                             }
                         }
@@ -243,16 +297,27 @@ public class GraffitiMod {
 
         server.execute(() -> {
             List<PaintPayload> syncData = new ArrayList<>();
-            
-            SERVER_CACHE.forEach((ck, blocks) -> blocks.forEach((posL, faces) -> faces.forEach((side, grid) -> {
-                for (int u = 0; u < 16; u++) {
-                    for (int v = 0; v < 16; v++) {
-                        if (grid[u][v] != 0) {
-                            syncData.add(new PaintPayload(net.minecraft.core.BlockPos.of(posL), side, u, v, grid[u][v], 1));
+
+            for (var dimEntry : SERVER_CACHE.entrySet()) {
+                String dim = dimEntry.getKey();
+                for (var ckEntry : dimEntry.getValue().entrySet()) {
+                    long ck = ckEntry.getKey();
+                    for (var posLEntry : ckEntry.getValue().entrySet()) {
+                        long posL = posLEntry.getKey();
+                        for (var faceEntry : posLEntry.getValue().entrySet()) {
+                            Direction side = faceEntry.getKey();
+                            int[][] grid = faceEntry.getValue();
+                            for (int u = 0; u < 16; u++) {
+                                for (int v = 0; v < 16; v++) {
+                                    if (grid[u][v] != 0) {
+                                        syncData.add(new PaintPayload(BlockPos.of(posL), side, u, v, grid[u][v], 1));
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-            })));
+            }
 
             if (!syncData.isEmpty()) {
                 PacketDistributor.sendToPlayer(sp, new SyncGraffitiPayload(syncData));
@@ -263,25 +328,30 @@ public class GraffitiMod {
     public void onServerTick(ServerTickEvent.Post event) {
         int currentTick = event.getServer().getTickCount();
 
-        var ckIter = LAST_PAINT_TICK.entrySet().iterator();
-        while (ckIter.hasNext()) {
-            var ckEntry = ckIter.next();
-            long ck = ckEntry.getKey();
-            var blockIter = ckEntry.getValue().entrySet().iterator();
-            while (blockIter.hasNext()) {
-                var blockEntry = blockIter.next();
-                long posL = blockEntry.getKey();
-                var faceIter = blockEntry.getValue().entrySet().iterator();
-                while (faceIter.hasNext()) {
-                    var faceEntry = faceIter.next();
-                    if (currentTick - faceEntry.getValue() > IDLE_TICKS) {
-                        saveSnapshot(ck, posL, faceEntry.getKey());
-                        faceIter.remove();
+        var dimIter = LAST_PAINT_TICK.entrySet().iterator();
+        while (dimIter.hasNext()) {
+            var dimEntry = dimIter.next();
+            var ckIter = dimEntry.getValue().entrySet().iterator();
+            while (ckIter.hasNext()) {
+                var ckEntry = ckIter.next();
+                long ck = ckEntry.getKey();
+                var blockIter = ckEntry.getValue().entrySet().iterator();
+                while (blockIter.hasNext()) {
+                    var blockEntry = blockIter.next();
+                    long posL = blockEntry.getKey();
+                    var faceIter = blockEntry.getValue().entrySet().iterator();
+                    while (faceIter.hasNext()) {
+                        var faceEntry = faceIter.next();
+                        if (currentTick - faceEntry.getValue() > IDLE_TICKS) {
+                            saveSnapshot(dimEntry.getKey(), ck, posL, faceEntry.getKey());
+                            faceIter.remove();
+                        }
                     }
+                    if (blockEntry.getValue().isEmpty()) blockIter.remove();
                 }
-                if (blockEntry.getValue().isEmpty()) blockIter.remove();
+                if (ckEntry.getValue().isEmpty()) ckIter.remove();
             }
-            if (ckEntry.getValue().isEmpty()) ckIter.remove();
+            if (dimEntry.getValue().isEmpty()) dimIter.remove();
         }
 
         long dayTime = event.getServer().overworld().getDayTime();
@@ -330,8 +400,10 @@ public class GraffitiMod {
         }
     }
 
-    public static void saveSnapshot(long ck, long posL, net.minecraft.core.Direction side) {
-        var chunk = SERVER_CACHE.get(ck);
+    public static void saveSnapshot(String dim, long ck, long posL, Direction side) {
+        var dimCache = SERVER_CACHE.get(dim);
+        if (dimCache == null) return;
+        var chunk = dimCache.get(ck);
         if (chunk == null) return;
         var faces = chunk.get(posL);
         if (faces == null) return;
@@ -344,6 +416,7 @@ public class GraffitiMod {
         }
 
         var history = UNDO_HISTORY
+                .computeIfAbsent(dim, k -> new HashMap<>())
                 .computeIfAbsent(ck, k -> new HashMap<>())
                 .computeIfAbsent(posL, k -> new HashMap<>())
                 .computeIfAbsent(side, k -> new ArrayList<>());
@@ -363,31 +436,30 @@ public class GraffitiMod {
         if (history.size() > 20) history.remove(0);
     }
 
-    public static int[][] handleUndo(long ck, long posL, net.minecraft.core.Direction side) {
-        return handleUndoRedo(ck, posL, side, false);
+    public static int[][] handleUndo(String dim, long ck, long posL, Direction side) {
+        return handleUndoRedo(dim, ck, posL, side, false);
     }
 
-    public static int[][] handleRedo(long ck, long posL, net.minecraft.core.Direction side) {
-        return handleUndoRedo(ck, posL, side, true);
+    public static int[][] handleRedo(String dim, long ck, long posL, Direction side) {
+        return handleUndoRedo(dim, ck, posL, side, true);
     }
 
-    private static int[][] handleUndoRedo(long ck, long posL, net.minecraft.core.Direction side, boolean redo) {
-        var chunk = UNDO_HISTORY.get(ck);
+    private static int[][] handleUndoRedo(String dim, long ck, long posL, Direction side, boolean redo) {
+        var dimHist = UNDO_HISTORY.get(dim);
+        if (dimHist == null) return null;
+        var chunk = dimHist.get(ck);
         if (chunk == null) return null;
         var faces = chunk.get(posL);
         if (faces == null) return null;
         var history = faces.get(side);
         if (history == null || history.isEmpty()) return null;
 
-        var currentChunk = SERVER_CACHE.get(ck);
-        var currentFaces = currentChunk != null ? currentChunk.get(posL) : null;
-        int[][] currentGrid = currentFaces != null ? currentFaces.get(side) : null;
+        var dimCache = SERVER_CACHE.computeIfAbsent(dim, k -> new HashMap<>());
+        var currentChunk = dimCache.computeIfAbsent(ck, k -> new HashMap<>());
+        var currentFaces = currentChunk.computeIfAbsent(posL, k -> new EnumMap<>(Direction.class));
+        int[][] currentGrid = currentFaces.get(side);
         if (currentGrid == null) {
             currentGrid = new int[16][16];
-            if (currentFaces == null) {
-                currentFaces = new EnumMap<>(net.minecraft.core.Direction.class);
-                currentChunk.put(posL, currentFaces);
-            }
             currentFaces.put(side, currentGrid);
         }
 
@@ -420,11 +492,10 @@ public class GraffitiMod {
             System.arraycopy(target[u], 0, currentGrid[u], 0, 16);
         }
 
-        // Discard future history if user paints later (handled in paint handler)
         return currentGrid;
     }
 
-    public static void broadcastFace(net.minecraft.core.BlockPos pos, net.minecraft.core.Direction side, int[][] grid, ServerLevel level) {
+    public static void broadcastFace(BlockPos pos, Direction side, int[][] grid, ServerLevel level) {
         int[] flat = new int[256];
         for (int u = 0; u < 16; u++) {
             for (int v = 0; v < 16; v++) {
@@ -437,17 +508,22 @@ public class GraffitiMod {
         }
     }
 
-    public static void recordPaintTick(long ck, long posL, net.minecraft.core.Direction side, int tick) {
-        LAST_PAINT_TICK.computeIfAbsent(ck, k -> new HashMap<>())
-                .computeIfAbsent(posL, k -> new EnumMap<>(net.minecraft.core.Direction.class))
+    public static void recordPaintTick(String dim, long ck, long posL, Direction side, int tick) {
+        LAST_PAINT_TICK.computeIfAbsent(dim, k -> new HashMap<>())
+                .computeIfAbsent(ck, k -> new HashMap<>())
+                .computeIfAbsent(posL, k -> new EnumMap<>(Direction.class))
                 .put(side, tick);
     }
 
     private void desaturateAll(ServerLevel level) {
+        String dim = dimKey(level);
+        var dimCache = SERVER_CACHE.get(dim);
+        if (dimCache == null || dimCache.isEmpty()) return;
+
         List<PaintPayload> syncData = new ArrayList<>();
         var rng = new Random();
 
-        SERVER_CACHE.forEach((ck, blocks) -> blocks.forEach((posL, faces) -> faces.forEach((side, grid) -> {
+        dimCache.forEach((ck, blocks) -> blocks.forEach((posL, faces) -> faces.forEach((side, grid) -> {
             for (int u = 0; u < 16; u++) {
                 for (int v = 0; v < 16; v++) {
                     int color = grid[u][v];
@@ -479,7 +555,7 @@ public class GraffitiMod {
         for (var player : level.getServer().getPlayerList().getPlayers()) {
             PacketDistributor.sendToPlayer(player, payload);
         }
-        LOGGER.info("Desaturated {} graffiti pixels (30 in-game days)", syncData.size());
+        LOGGER.info("Desaturated {} graffiti pixels in {}", syncData.size(), dim);
     }
 
     private static final Direction[] HORIZONTAL_CYCLE = {
@@ -496,7 +572,7 @@ public class GraffitiMod {
         return dir;
     }
 
-    private static Direction getHitFace(BlockPos pos, net.minecraft.world.entity.player.Player player) {
+    private static Direction getHitFace(BlockPos pos, Player player) {
         Vec3 delta = player.position().subtract(Vec3.atCenterOf(pos));
         double absX = Math.abs(delta.x);
         double absY = Math.abs(delta.y);
@@ -536,10 +612,13 @@ public class GraffitiMod {
         if (player == null) return;
         BlockPos pos = event.getPos();
 
+        String dim = dimKey(player.level());
         long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
         long posL = pos.asLong();
 
-        var chunk = SERVER_CACHE.get(ck);
+        var dimCache = SERVER_CACHE.get(dim);
+        if (dimCache == null) return;
+        var chunk = dimCache.get(ck);
         if (chunk == null) return;
         var faces = chunk.get(posL);
         if (faces == null || faces.isEmpty()) return;
@@ -568,9 +647,13 @@ public class GraffitiMod {
         PLAYER_CLIPBOARD.computeIfAbsent(player.getUUID(), k -> new ArrayDeque<>()).addLast(new ClipboardEntry(blockId, clipboard));
 
         chunk.remove(posL);
-        if (chunk.isEmpty()) SERVER_CACHE.remove(ck);
+        if (chunk.isEmpty()) dimCache.remove(ck);
 
-        UNDO_HISTORY.remove(ck);
+        var dimUndo = UNDO_HISTORY.get(dim);
+        if (dimUndo != null) {
+            dimUndo.remove(ck);
+            if (dimUndo.isEmpty()) UNDO_HISTORY.remove(dim);
+        }
 
         ServerLevel level = player.getServer() != null
                 ? player.getServer().getLevel(player.level().dimension()) : null;
@@ -584,7 +667,7 @@ public class GraffitiMod {
 
     private void onBlockPlace(BlockEvent.EntityPlaceEvent event) {
         var entity = event.getEntity();
-        if (!(entity instanceof net.minecraft.world.entity.player.Player player)) return;
+        if (!(entity instanceof Player player)) return;
 
         var deque = PLAYER_CLIPBOARD.get(player.getUUID());
         if (deque == null || deque.isEmpty()) return;
@@ -616,21 +699,23 @@ public class GraffitiMod {
             default -> 0;
         };
 
+        String dim = dimKey(player.level());
         long ck = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
         long posL = pos.asLong();
 
-        var targetFaces = SERVER_CACHE.computeIfAbsent(ck, k -> new HashMap<>())
+        var dimCache = SERVER_CACHE.computeIfAbsent(dim, k -> new HashMap<>());
+        var targetFaces = dimCache.computeIfAbsent(ck, k -> new HashMap<>())
                 .computeIfAbsent(posL, k -> new EnumMap<>(Direction.class));
 
         var level = player.getServer() != null
                 ? player.getServer().getLevel(player.level().dimension()) : null;
 
-        for (var entry : clipboard.entrySet()) {
-            Direction newFace = mapHorizontalFace(entry.getKey(), rotations);
-            targetFaces.put(newFace, entry.getValue());
+        for (var clipEntry : clipboard.entrySet()) {
+            Direction newFace = mapHorizontalFace(clipEntry.getKey(), rotations);
+            targetFaces.put(newFace, clipEntry.getValue());
 
             if (level != null) {
-                broadcastFace(pos, newFace, entry.getValue(), level);
+                broadcastFace(pos, newFace, clipEntry.getValue(), level);
             }
         }
     }
@@ -645,7 +730,6 @@ public class GraffitiMod {
         ItemStack result = event.getCrafting();
         if (!result.is(GRAFFITI_TOOL.get())) return;
 
-        // Copy settings from input can
         for (int i = 0; i < event.getInventory().getContainerSize(); i++) {
             ItemStack input = event.getInventory().getItem(i);
             if (input.is(GRAFFITI_TOOL.get())) {
@@ -655,14 +739,12 @@ public class GraffitiMod {
                 boolean inputLocked = GraffitiItem.isColorLocked(input);
                 ItemStack finalResult = event.getCrafting();
 
-                // Apply to result immediately
                 GraffitiItem.setColor(finalResult, inputColor);
                 GraffitiItem.setBrushSize(finalResult, inputSize);
                 GraffitiItem.setBrushShape(finalResult, inputShape);
                 if (inputLocked) GraffitiItem.setColorLocked(finalResult, true);
                 finalResult.setDamageValue(0);
 
-                // Also schedule an inventory update to ensure it sticks
                 var player = event.getEntity();
                 if (player instanceof ServerPlayer sp) {
                     sp.getServer().execute(() -> {
@@ -684,8 +766,10 @@ public class GraffitiMod {
         }
     }
 
-    public static void discardFutureHistory(long ck, long posL, net.minecraft.core.Direction side) {
-        var chunk = UNDO_HISTORY.get(ck);
+    public static void discardFutureHistory(String dim, long ck, long posL, Direction side) {
+        var dimHist = UNDO_HISTORY.get(dim);
+        if (dimHist == null) return;
+        var chunk = dimHist.get(ck);
         if (chunk == null) return;
         var faces = chunk.get(posL);
         if (faces == null) return;
@@ -695,10 +779,13 @@ public class GraffitiMod {
         if (history.size() <= 1) return;
 
         int[][] current = null;
-        var sc = SERVER_CACHE.get(ck);
-        if (sc != null) {
-            var fc = sc.get(posL);
-            if (fc != null) current = fc.get(side);
+        var dimCache = SERVER_CACHE.get(dim);
+        if (dimCache != null) {
+            var sc = dimCache.get(ck);
+            if (sc != null) {
+                var fc = sc.get(posL);
+                if (fc != null) current = fc.get(side);
+            }
         }
         if (current == null) return;
 

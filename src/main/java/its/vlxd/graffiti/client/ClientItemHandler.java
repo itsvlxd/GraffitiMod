@@ -4,6 +4,7 @@ import its.vlxd.graffiti.GraffitiMod;
 import its.vlxd.graffiti.client.gui.GraffitiHUD;
 import its.vlxd.graffiti.client.gui.GraffitiScreen;
 import its.vlxd.graffiti.client.renderer.GraffitiRenderer;
+import its.vlxd.graffiti.config.GraffitiConfig;
 import its.vlxd.graffiti.item.GraffitiItem;
 import its.vlxd.graffiti.network.ColorPayload;
 import its.vlxd.graffiti.network.PaintPayload;
@@ -27,7 +28,7 @@ public class ClientItemHandler {
         var client = Minecraft.getInstance();
         if (client.player != null) {
             BlockPos pos = hit.getBlockPos();
-            double reach = client.player.blockInteractionRange();
+            double reach = GraffitiConfig.get().sprayReach;
             if (client.player.distanceToSqr(Vec3.atCenterOf(pos)) > reach * reach) return;
 
             ItemStack stack = client.player.getMainHandItem();

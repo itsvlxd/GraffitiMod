@@ -78,7 +78,10 @@ public class ClientHandler {
         NeoForge.EVENT_BUS.addListener(ClientHandler::onRenderFrame);
         NeoForge.EVENT_BUS.addListener(ClientHandler::onRenderGui);
 
-        ClientPlayConnection.JOIN.register(() -> clearClientCache());
+        ClientPlayConnection.JOIN.register(() -> {
+            GraffitiRenderer.resetServerSyncFlag();
+            clearClientCache();
+        });
         ClientPlayConnection.DISCONNECT.register(() -> clearClientCache());
     }
 
@@ -294,17 +297,19 @@ public class ClientHandler {
 
     public static void handleFaceSync(FaceSyncPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
+            String dim = GraffitiRenderer.currentDim();
             int[][] grid = new int[16][16];
             for (int i = 0; i < 256; i++) {
                 grid[i / 16][i % 16] = payload.flatGrid()[i];
             }
             long ck = ChunkPos.asLong(payload.pos().getX() >> 4, payload.pos().getZ() >> 4);
             GraffitiRenderer.GRAFFITI_CACHE
+                    .computeIfAbsent(dim, k -> new java.util.concurrent.ConcurrentHashMap<>())
                     .computeIfAbsent(ck, k -> new HashMap<>())
                     .computeIfAbsent(payload.pos().asLong(), k -> new EnumMap<>(Direction.class))
                     .put(payload.side(), grid);
-            
-            GraffitiRenderer.invalidateFace(ck, payload.pos().asLong(), payload.side());
+
+            GraffitiRenderer.invalidateFace(dim, ck, payload.pos().asLong(), payload.side());
         });
     }
 
@@ -312,9 +317,13 @@ public class ClientHandler {
         context.enqueueWork(() -> {
             GraffitiRenderer.GRAFFITI_CACHE.clear();
             GraffitiRenderer.BAKED_CACHE.clear();
+            synchronized (GraffitiRenderer.PIXELS) {
+                GraffitiRenderer.PIXELS.clear();
+            }
             for (PaintPayload p : payload.allPixels()) {
                 GraffitiRenderer.addPixelToCache(p);
             }
+            GraffitiRenderer.markServerSyncReceived();
             GraffitiMod.LOGGER.info("Loaded {} pixels", payload.allPixels().size());
         });
     }

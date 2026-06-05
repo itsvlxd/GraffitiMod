@@ -18,6 +18,7 @@ public class GraffitiConfig {
     public boolean enabled = true;
     public boolean useCulling = true;
     public int renderDistance = 32;
+    public double sprayReach = 8.0;
 
     private static GraffitiConfig INSTANCE = new GraffitiConfig();
 
