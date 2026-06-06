@@ -1,7 +1,9 @@
 package its.vlxd.graffiti.client.renderer;
 
 import its.vlxd.graffiti.GraffitiMod;
+import its.vlxd.graffiti.client.gui.GalleryScreen;
 import its.vlxd.graffiti.config.GraffitiConfig;
+import its.vlxd.graffiti.gallery.SavedDesign;
 import its.vlxd.graffiti.network.PaintPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -175,8 +177,91 @@ public class GraffitiRenderer {
             }
         }
 
+        // Selection box (always visible when both positions are set)
+        var mc = Minecraft.getInstance();
+        if (GalleryScreen.selPos1 != null && GalleryScreen.selPos2 != null) {
+            var lineBuffer = bufferSource.getBuffer(RenderType.lines());
+            BlockPos min = BlockPos.min(GalleryScreen.selPos1, GalleryScreen.selPos2);
+            BlockPos max = BlockPos.max(GalleryScreen.selPos1, GalleryScreen.selPos2);
+            renderSelectionBox(poseStack.last().pose(), lineBuffer, min, max);
+        }
+
+        // Preview ghost (semi-transparent design overlay, rotated to match player facing)
+        if (GalleryScreen.previewActive && GalleryScreen.previewDesign != null
+                && mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult previewHit) {
+            BlockPos base = previewHit.getBlockPos().offset(0, GalleryScreen.previewYOffset, 0);
+            SavedDesign design = GalleryScreen.previewDesign;
+            int rotations = 0;
+            if (mc.player != null) {
+                rotations = GraffitiMod.getRotations(design.facing(), mc.player.getDirection());
+            }
+            for (var blockEntry : design.blocks().entrySet()) {
+                BlockPos rotatedRel = GraffitiMod.rotatePos(blockEntry.getKey(), rotations);
+                BlockPos worldPos = base.offset(rotatedRel);
+                if (world.getBlockState(worldPos).isAir()) continue;
+
+                poseStack.pushPose();
+                poseStack.translate(worldPos.getX(), worldPos.getY(), worldPos.getZ());
+                Matrix4f model = poseStack.last().pose();
+
+                for (var faceEntry : blockEntry.getValue().entrySet()) {
+                    Direction side = faceEntry.getKey();
+                    Direction rotatedSide = GraffitiMod.mapHorizontalFace(side, rotations);
+                    int[][] grid = faceEntry.getValue();
+                    if (side.getAxis() != rotatedSide.getAxis() && side != Direction.UP && side != Direction.DOWN)
+                        grid = GraffitiMod.flipHorizontal(grid);
+                    int light = LevelRenderer.getLightColor(world, worldPos.relative(rotatedSide));
+                    float depth = rotatedSide.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1.0f : 0.0f;
+
+                    // Render with halved alpha for preview
+                    for (int u = 0; u < 16; u++) {
+                        for (int v = 0; v < 16; v++) {
+                            int color = grid[u][v];
+                            if (color == 0) continue;
+                            int alpha = (color >> 24) & 0xFF;
+                            int previewColor = (color & 0xFFFFFF) | ((alpha / 2) << 24);
+                            drawQuad(model, buffer, rotatedSide, u, v, 1, 1, previewColor, light, depth);
+                        }
+                    }
+                }
+                poseStack.popPose();
+            }
+        }
+
         poseStack.popPose();
         bufferSource.endBatch(RenderType.entityTranslucent(WHITE_TEXTURE));
+    }
+
+    private static void renderSelectionBox(Matrix4f pose, com.mojang.blaze3d.vertex.VertexConsumer buf, BlockPos min, BlockPos max) {
+        float x1 = min.getX();
+        float y1 = min.getY();
+        float z1 = min.getZ();
+        float x2 = max.getX() + 1;
+        float y2 = max.getY() + 1;
+        float z2 = max.getZ() + 1;
+
+        int r = 255, g = 50, b = 50, a = 200;
+
+        // Bottom face
+        line(pose, buf, x1, y1, z1, x2, y1, z1, r, g, b, a);
+        line(pose, buf, x2, y1, z1, x2, y1, z2, r, g, b, a);
+        line(pose, buf, x2, y1, z2, x1, y1, z2, r, g, b, a);
+        line(pose, buf, x1, y1, z2, x1, y1, z1, r, g, b, a);
+        // Top face
+        line(pose, buf, x1, y2, z1, x2, y2, z1, r, g, b, a);
+        line(pose, buf, x2, y2, z1, x2, y2, z2, r, g, b, a);
+        line(pose, buf, x2, y2, z2, x1, y2, z2, r, g, b, a);
+        line(pose, buf, x1, y2, z2, x1, y2, z1, r, g, b, a);
+        // Vertical edges
+        line(pose, buf, x1, y1, z1, x1, y2, z1, r, g, b, a);
+        line(pose, buf, x2, y1, z1, x2, y2, z1, r, g, b, a);
+        line(pose, buf, x2, y1, z2, x2, y2, z2, r, g, b, a);
+        line(pose, buf, x1, y1, z2, x1, y2, z2, r, g, b, a);
+    }
+
+    private static void line(Matrix4f pose, com.mojang.blaze3d.vertex.VertexConsumer buf, float x1, float y1, float z1, float x2, float y2, float z2, int r, int g, int b, int a) {
+        buf.addVertex(pose, x1, y1, z1).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buf.addVertex(pose, x2, y2, z2).setColor(r, g, b, a).setNormal(0, 1, 0);
     }
 
     public static void addPixelToCache(PaintPayload p) {

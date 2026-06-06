@@ -23,6 +23,7 @@ public class GraffitiItem extends Item {
     public static final int TOOL_PENCIL = 0;
     public static final int TOOL_FILL = 1;
     public static final int TOOL_PICKER = 2;
+    public static final int TOOL_SELECT = 3;
 
     public GraffitiItem(Properties properties) { super(properties); }
 
@@ -86,7 +87,7 @@ public class GraffitiItem extends Item {
 
     public static void setToolMode(ItemStack stack, int mode) {
         var tag = getTag(stack);
-        tag.putInt("ToolMode", Math.max(0, Math.min(2, mode)));
+        tag.putInt("ToolMode", Math.max(0, Math.min(3, mode)));
         saveTag(stack, tag);
     }
 
@@ -124,6 +125,7 @@ public class GraffitiItem extends Item {
         return switch (mode) {
             case TOOL_FILL -> "Fill";
             case TOOL_PICKER -> "Picker";
+            case TOOL_SELECT -> "Select";
             default -> "Pencil";
         };
     }

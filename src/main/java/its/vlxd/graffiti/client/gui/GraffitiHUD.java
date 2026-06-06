@@ -8,10 +8,11 @@ public class GraffitiHUD {
     private static final Component[] TOOL_NAMES = {
             Component.translatable("hud.graffiti.tool.pencil"),
             Component.translatable("hud.graffiti.tool.fill"),
-            Component.translatable("hud.graffiti.tool.picker")
+            Component.translatable("hud.graffiti.tool.picker"),
+            Component.literal("Select")
     };
 
-    private static final int[] MODE_COLORS = {0xFFFFFF, 0x55FF55, 0xFFDD44};
+    private static final int[] MODE_COLORS = {0xFFFFFF, 0x55FF55, 0xFFDD44, 0xFF5555};
 
     public static final int[] SHAPE_COLORS = {0xFF5555, 0xFF7700, 0x77AA77, 0xAAAAFF, 0x77FFAA};
 

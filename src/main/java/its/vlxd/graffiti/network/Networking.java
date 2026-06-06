@@ -129,6 +129,38 @@ public class Networking {
                 DebugPayload.CODEC,
                 (payload, context) -> dispatchClientDebug(payload, context)
         );
+
+        registrar.playToClient(
+                GalleryListPayload.TYPE,
+                GalleryListPayload.CODEC,
+                (payload, context) -> dispatchClientGalleryList(payload, context)
+        );
+
+        registrar.playToServer(
+                GallerySavePayload.TYPE,
+                GallerySavePayload.CODEC,
+                (payload, context) -> handleGallerySaveServer(payload, context)
+        );
+
+        registrar.playToServer(
+                GalleryPastePayload.TYPE,
+                GalleryPastePayload.CODEC,
+                (payload, context) -> handleGalleryPasteServer(payload, context)
+        );
+
+        registrar.playToServer(
+                GalleryDeletePayload.TYPE,
+                GalleryDeletePayload.CODEC,
+                (payload, context) -> handleGalleryDeleteServer(payload, context)
+        );
+    }
+
+    private static void dispatchClientGalleryList(GalleryListPayload payload, IPayloadContext context) {
+        try {
+            Class.forName("its.vlxd.graffiti.client.ClientHandler")
+                    .getMethod("handleGalleryList", GalleryListPayload.class, IPayloadContext.class)
+                    .invoke(null, payload, context);
+        } catch (Exception ignored) {}
     }
 
     private static void dispatchClientRemove(RemoveGraffitiPayload payload, IPayloadContext context) {
@@ -218,6 +250,30 @@ public class Networking {
                     .getMethod("handleDebugPacket", DebugPayload.class, IPayloadContext.class)
                     .invoke(null, payload, context);
         } catch (Exception ignored) {}
+    }
+
+    private static void handleGallerySaveServer(GallerySavePayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            var player = context.player();
+            if (!(player instanceof net.minecraft.server.level.ServerPlayer sp)) return;
+            GraffitiMod.handleGallerySave(sp, payload);
+        });
+    }
+
+    private static void handleGalleryPasteServer(GalleryPastePayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            var player = context.player();
+            if (!(player instanceof net.minecraft.server.level.ServerPlayer sp)) return;
+            GraffitiMod.handleGalleryPaste(sp, payload);
+        });
+    }
+
+    private static void handleGalleryDeleteServer(GalleryDeletePayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            var player = context.player();
+            if (!(player instanceof net.minecraft.server.level.ServerPlayer sp)) return;
+            GraffitiMod.handleGalleryDelete(sp, payload.designId());
+        });
     }
 
     private static void handlePaintPacketServer(PaintPayload payload, IPayloadContext context) {

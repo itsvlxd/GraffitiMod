@@ -9,6 +9,10 @@ import its.vlxd.graffiti.network.Networking;
 import its.vlxd.graffiti.network.PaintPayload;
 import its.vlxd.graffiti.network.RemoveGraffitiPayload;
 import its.vlxd.graffiti.network.SyncGraffitiPayload;
+import its.vlxd.graffiti.network.GalleryListPayload;
+import its.vlxd.graffiti.network.GallerySavePayload;
+import its.vlxd.graffiti.network.GalleryPastePayload;
+import its.vlxd.graffiti.gallery.SavedDesign;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -87,6 +91,8 @@ public class GraffitiMod {
     public static final Map<String, Map<Long, Map<Long, Map<Direction, List<int[][]>>>>> UNDO_HISTORY = new HashMap<>();
     public static final Map<String, Map<Long, Map<Long, Map<Direction, Integer>>>> LAST_PAINT_TICK = new HashMap<>();
     private static final int IDLE_TICKS = 20;
+    private static final int GALLERY_MAGIC = 0x47616C6C;
+    public static final Map<UUID, List<SavedDesign>> GALLERY = new HashMap<>();
     private record ClipboardEntry(ResourceLocation blockId, Map<Direction, int[][]> faces) {}
     public static final Map<java.util.UUID, Deque<ClipboardEntry>> PLAYER_CLIPBOARD = new HashMap<>();
     private static final long DESATURATION_INTERVAL = 120_000L; // 5 in-game days
@@ -241,6 +247,23 @@ public class GraffitiMod {
         lastDesatTick = level.getDayTime() - (level.getDayTime() % DESATURATION_INTERVAL);
         LOGGER.info("Desaturation epoch aligned to dayTime={}, next desat at dayTime={}",
                 level.getDayTime(), lastDesatTick + DESATURATION_INTERVAL);
+
+        GALLERY.clear();
+        File galFile = new File(event.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(), "gallery.bin");
+        if (galFile.exists()) {
+            try (DataInputStream in = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(galFile))))) {
+                int magic = in.readInt();
+                if (magic == GALLERY_MAGIC) {
+                    int designCount = in.readInt();
+                    for (int i = 0; i < designCount; i++) {
+                        SavedDesign design = SavedDesign.read(in);
+                        GALLERY.computeIfAbsent(design.authorId(), k -> new ArrayList<>()).add(design);
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.error("Failed to load gallery data", e);
+            }
+        }
     }
 
     private void onServerStopping(ServerStoppingEvent event) {
@@ -288,6 +311,22 @@ public class GraffitiMod {
         } catch (Exception e) {
             LOGGER.error("Failed to save graffiti data", e);
         }
+
+        File galFile = new File(event.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(), "gallery.bin");
+        try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(new BufferedOutputStream(new FileOutputStream(galFile))))) {
+            out.writeInt(GALLERY_MAGIC);
+            int totalDesigns = 0;
+            for (var list : GALLERY.values()) totalDesigns += list.size();
+            out.writeInt(totalDesigns);
+            for (var list : GALLERY.values()) {
+                for (var design : list) {
+                    design.write(out);
+                }
+            }
+            out.flush();
+        } catch (Exception e) {
+            LOGGER.error("Failed to save gallery data", e);
+        }
     }
 
     private void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
@@ -322,6 +361,8 @@ public class GraffitiMod {
             if (!syncData.isEmpty()) {
                 PacketDistributor.sendToPlayer(sp, new SyncGraffitiPayload(syncData));
             }
+
+            syncGalleryToPlayer(sp);
         });
     }
 
@@ -515,6 +556,208 @@ public class GraffitiMod {
                 .put(side, tick);
     }
 
+    public static void syncGalleryToPlayer(ServerPlayer sp) {
+        List<SavedDesign> playerDesigns = GALLERY.getOrDefault(sp.getUUID(), List.of());
+        PacketDistributor.sendToPlayer(sp, new GalleryListPayload(playerDesigns));
+    }
+
+    public static void handleGallerySave(ServerPlayer player, GallerySavePayload payload) {
+        var server = player.getServer();
+        if (server == null) return;
+
+        String dim = dimKey(player.level());
+        ItemStack held = player.getMainHandItem();
+        if (!held.is(GRAFFITI_TOOL.get())) {
+            player.sendSystemMessage(Component.literal("Must hold a graffiti can to save."));
+            return;
+        }
+
+        BlockPos min = BlockPos.min(payload.pos1(), payload.pos2());
+        BlockPos max = BlockPos.max(payload.pos1(), payload.pos2());
+        Map<BlockPos, Map<Direction, int[][]>> blocks = new LinkedHashMap<>();
+        int pixelCount = 0;
+
+        var dimCache = SERVER_CACHE.get(dim);
+        if (dimCache == null) {
+            player.sendSystemMessage(Component.literal("§7Nothing to save here."));
+            return;
+        }
+
+        for (int x = min.getX(); x <= max.getX(); x++) {
+            for (int y = min.getY(); y <= max.getY(); y++) {
+                for (int z = min.getZ(); z <= max.getZ(); z++) {
+                    BlockPos bp = new BlockPos(x, y, z);
+                    long ck = ChunkPos.asLong(bp.getX() >> 4, bp.getZ() >> 4);
+                    long posL = bp.asLong();
+                    var chunk = dimCache.get(ck);
+                    if (chunk == null) continue;
+                    var faces = chunk.get(posL);
+                    if (faces == null || faces.isEmpty()) continue;
+
+                    Map<Direction, int[][]> copiedFaces = new EnumMap<>(Direction.class);
+                    for (var faceEntry : faces.entrySet()) {
+                        Direction side = faceEntry.getKey();
+                        int[][] grid = faceEntry.getValue();
+                        int[][] copy = new int[16][16];
+                        for (int u = 0; u < 16; u++) {
+                            System.arraycopy(grid[u], 0, copy[u], 0, 16);
+                        }
+                        copiedFaces.put(side, copy);
+                        for (int u = 0; u < 16; u++) {
+                            for (int v = 0; v < 16; v++) {
+                                if (copy[u][v] != 0) pixelCount++;
+                            }
+                        }
+                    }
+                    blocks.put(bp.subtract(min), copiedFaces);
+                }
+            }
+        }
+
+        if (blocks.isEmpty()) {
+            player.sendSystemMessage(Component.literal("§7Nothing to save here."));
+            return;
+        }
+
+        int remaining = held.getMaxDamage() - held.getDamageValue();
+        if (pixelCount > remaining) {
+            player.sendSystemMessage(Component.literal("§7Not enough paint! Need §c" + pixelCount + " §7durability, have §c" + remaining + "§7."));
+            return;
+        }
+
+        held.setDamageValue(held.getDamageValue() + pixelCount);
+
+        SavedDesign design = new SavedDesign(
+                UUID.randomUUID(),
+                payload.name(),
+                player.getUUID(),
+                System.currentTimeMillis(),
+                0,
+                player.getDirection(),
+                blocks
+        );
+
+        GALLERY.computeIfAbsent(player.getUUID(), k -> new ArrayList<>()).add(design);
+
+        player.sendSystemMessage(Component.literal("§7Saved §a" + payload.name() + " §7(" + pixelCount + " pixels)"));
+        syncGalleryToPlayer(player);
+        server.execute(() -> saveGallery(server));
+    }
+
+    public static void handleGalleryPaste(ServerPlayer player, GalleryPastePayload payload) {
+        var server = player.getServer();
+        if (server == null) return;
+
+        List<SavedDesign> playerDesigns = GALLERY.get(player.getUUID());
+        if (playerDesigns == null) {
+            player.sendSystemMessage(Component.literal("§7No designs found."));
+            return;
+        }
+
+        SavedDesign design = null;
+        for (SavedDesign d : playerDesigns) {
+            if (d.id().equals(payload.designId())) {
+                design = d;
+                break;
+            }
+        }
+        if (design == null) {
+            player.sendSystemMessage(Component.literal("§7Design not found."));
+            return;
+        }
+
+        ItemStack held = player.getMainHandItem();
+        if (!held.is(GRAFFITI_TOOL.get())) {
+            player.sendSystemMessage(Component.literal("§7Must hold a graffiti can to paste."));
+            return;
+        }
+
+        int pixelCount = design.pixelCount();
+        int remaining = held.getMaxDamage() - held.getDamageValue();
+        if (pixelCount > remaining) {
+            player.sendSystemMessage(Component.literal("§7Not enough paint! Need §c" + pixelCount + " §7durability, have §c" + remaining + "§7."));
+            return;
+        }
+
+        held.setDamageValue(held.getDamageValue() + pixelCount);
+
+        String dim = dimKey(player.level());
+        var dimCache = SERVER_CACHE.computeIfAbsent(dim, k -> new HashMap<>());
+        var level = server.getLevel(player.level().dimension());
+        if (level == null) return;
+
+        BlockPos target = payload.targetPos();
+
+        // Rotate based on facing difference
+        int rotations = getRotations(design.facing(), player.getDirection());
+
+        int pasted = 0;
+
+        for (var blockEntry : design.blocks().entrySet()) {
+            BlockPos relative = blockEntry.getKey();
+            BlockPos rotatedRel = rotatePos(relative, rotations);
+            BlockPos worldPos = target.offset(rotatedRel);
+            if (!level.getBlockState(worldPos).isAir()) {
+                long ck = ChunkPos.asLong(worldPos.getX() >> 4, worldPos.getZ() >> 4);
+                long posL = worldPos.asLong();
+                var targetFaces = dimCache.computeIfAbsent(ck, k -> new HashMap<>())
+                        .computeIfAbsent(posL, k -> new EnumMap<>(Direction.class));
+
+                for (var faceEntry : blockEntry.getValue().entrySet()) {
+                    Direction side = faceEntry.getKey();
+                    Direction rotatedSide = mapHorizontalFace(side, rotations);
+                    int[][] grid = faceEntry.getValue();
+                    if (side.getAxis() != rotatedSide.getAxis() && side != Direction.UP && side != Direction.DOWN)
+                        grid = flipHorizontal(grid);
+                    targetFaces.put(rotatedSide, grid);
+                    broadcastFace(worldPos, rotatedSide, grid, level);
+                    pasted++;
+                }
+            }
+        }
+
+        player.sendSystemMessage(Component.literal("§7Pasted §a" + design.name() + " §7(" + pasted + " faces)"));
+    }
+
+    public static BlockPos rotatePos(BlockPos pos, int rotations) {
+        if (rotations == 0) return pos;
+        return switch ((rotations % 4 + 4) % 4) {
+            case 1 -> new BlockPos(-pos.getZ(), pos.getY(), pos.getX());
+            case 2 -> new BlockPos(-pos.getX(), pos.getY(), -pos.getZ());
+            case 3 -> new BlockPos(pos.getZ(), pos.getY(), -pos.getX());
+            default -> pos;
+        };
+    }
+
+    public static void handleGalleryDelete(ServerPlayer player, UUID designId) {
+        List<SavedDesign> playerDesigns = GALLERY.get(player.getUUID());
+        if (playerDesigns == null) return;
+        playerDesigns.removeIf(d -> d.id().equals(designId));
+        if (playerDesigns.isEmpty()) GALLERY.remove(player.getUUID());
+        player.sendSystemMessage(Component.literal("§7Design deleted."));
+        syncGalleryToPlayer(player);
+        var server = player.getServer();
+        if (server != null) server.execute(() -> saveGallery(server));
+    }
+
+    private static void saveGallery(net.minecraft.server.MinecraftServer server) {
+        File galFile = new File(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(), "gallery.bin");
+        try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(new BufferedOutputStream(new FileOutputStream(galFile))))) {
+            out.writeInt(GALLERY_MAGIC);
+            int totalDesigns = 0;
+            for (var list : GALLERY.values()) totalDesigns += list.size();
+            out.writeInt(totalDesigns);
+            for (var list : GALLERY.values()) {
+                for (var design : list) {
+                    design.write(out);
+                }
+            }
+            out.flush();
+        } catch (Exception e) {
+            LOGGER.error("Failed to save gallery data", e);
+        }
+    }
+
     private void desaturateAll(ServerLevel level) {
         String dim = dimKey(level);
         var dimCache = SERVER_CACHE.get(dim);
@@ -558,11 +801,24 @@ public class GraffitiMod {
         LOGGER.info("Desaturated {} graffiti pixels in {}", syncData.size(), dim);
     }
 
-    private static final Direction[] HORIZONTAL_CYCLE = {
+    public static int getRotations(Direction from, Direction to) {
+        for (int i = 0; i < HORIZONTAL_CYCLE.length; i++) {
+            if (HORIZONTAL_CYCLE[i] == to) {
+                for (int j = 0; j < HORIZONTAL_CYCLE.length; j++) {
+                    if (HORIZONTAL_CYCLE[j] == from) {
+                        return (i - j + 4) % 4;
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
+    public static final Direction[] HORIZONTAL_CYCLE = {
         Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST
     };
 
-    private static Direction mapHorizontalFace(Direction dir, int rotations) {
+    public static Direction mapHorizontalFace(Direction dir, int rotations) {
         if (dir == Direction.UP || dir == Direction.DOWN) return dir;
         for (int i = 0; i < 4; i++) {
             if (HORIZONTAL_CYCLE[i] == dir) {
@@ -602,6 +858,16 @@ public class GraffitiMod {
                     default -> { nu = u; nv = v; }
                 }
                 result[nu][nv] = val;
+            }
+        }
+        return result;
+    }
+
+    public static int[][] flipHorizontal(int[][] grid) {
+        int[][] result = new int[16][16];
+        for (int u = 0; u < 16; u++) {
+            for (int v = 0; v < 16; v++) {
+                result[15 - u][v] = grid[u][v];
             }
         }
         return result;
@@ -711,11 +977,15 @@ public class GraffitiMod {
                 ? player.getServer().getLevel(player.level().dimension()) : null;
 
         for (var clipEntry : clipboard.entrySet()) {
-            Direction newFace = mapHorizontalFace(clipEntry.getKey(), rotations);
-            targetFaces.put(newFace, clipEntry.getValue());
+            Direction oldFace = clipEntry.getKey();
+            Direction newFace = mapHorizontalFace(oldFace, rotations);
+            int[][] grid = clipEntry.getValue();
+            if (oldFace.getAxis() != newFace.getAxis() && oldFace != Direction.UP && oldFace != Direction.DOWN)
+                grid = flipHorizontal(grid);
+            targetFaces.put(newFace, grid);
 
             if (level != null) {
-                broadcastFace(pos, newFace, clipEntry.getValue(), level);
+                broadcastFace(pos, newFace, grid, level);
             }
         }
     }

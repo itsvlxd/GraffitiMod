@@ -27,6 +27,10 @@ public class ClientItemHandler {
     public static void handleAttack(BlockHitResult hit) {
         var client = Minecraft.getInstance();
         if (client.player != null) {
+            ItemStack heldStack = client.player.getMainHandItem();
+            if (heldStack.is(its.vlxd.graffiti.GraffitiMod.GRAFFITI_TOOL.get())
+                    && GraffitiItem.getToolMode(heldStack) == GraffitiItem.TOOL_SELECT) return;
+
             BlockPos pos = hit.getBlockPos();
             double reach = GraffitiConfig.get().sprayReach;
             if (client.player.distanceToSqr(Vec3.atCenterOf(pos)) > reach * reach) return;

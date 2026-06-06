@@ -35,7 +35,7 @@ public class GraffitiScreen extends Screen {
 
     private static final int[] SIZES = {1, 2, 3, 4, 5, 6, 7, 8};
     private static final String[] SHAPES = {"Square", "Circle", "Rounded", "Cloud", "Leaky"};
-    private static final String[] TOOLS = {"Pencil", "Fill", "Picker"};
+    private static final String[] TOOLS = {"Pencil", "Fill", "Picker", "Select"};
 
     public GraffitiScreen(ItemStack stack) {
         super(Component.literal("Graffiti Editor"));
@@ -93,11 +93,9 @@ public class GraffitiScreen extends Screen {
         addRenderableWidget(shapeBtn);
 
         toolBtn = Button.builder(Component.literal(TOOLS[toolMode]), b -> {
-            if (isLocked) {
-                toolMode = (toolMode + 1) % 2;
-            } else {
-                toolMode = (toolMode + 1) % 3;
-            }
+            do {
+                toolMode = (toolMode + 1) % 4;
+            } while (isLocked && toolMode == GraffitiItem.TOOL_PICKER);
             toolBtn.setMessage(Component.literal(TOOLS[toolMode]));
             GraffitiItem.setToolMode(stack, toolMode);
         }).bounds(px + 165, py + 143, 72, 16).tooltip(Tooltip.create(Component.literal("Cycle tool mode"))).build();
