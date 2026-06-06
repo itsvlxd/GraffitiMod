@@ -1,3 +1,15 @@
+# [1.4.0](https://github.com/itsvlxd/GraffitiMod/compare/v1.3.0...v1.4.0) (2026-06-06)
+
+
+### Bug Fixes
+
+* **gallery:** fix gallyer not placing graffiti properly ([19b61c7](https://github.com/itsvlxd/GraffitiMod/commit/19b61c79a792a2e009d6f7fcc8a0c9e885df9705))
+
+
+### Features
+
+* **gallery:** add gallery menu to save graffities ([0caf787](https://github.com/itsvlxd/GraffitiMod/commit/0caf787abc575237d0c58943c7a50fc5baa2cdc3))
+
 # [1.3.0](https://github.com/itsvlxd/GraffitiMod/compare/v1.2.0...v1.3.0) (2026-06-05)
 
 
