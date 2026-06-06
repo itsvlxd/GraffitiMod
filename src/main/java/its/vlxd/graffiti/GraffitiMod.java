@@ -20,6 +20,7 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
@@ -65,6 +66,7 @@ import java.util.zip.GZIPOutputStream;
 public class GraffitiMod {
     public static final String MOD_ID = "graffiti";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    public static final String PREFIX = "§6§lGraffitiMod §8§l┃ §7";
     private static final int SAVE_MAGIC = 0x47724166;
     private static final int SAVE_FORMAT_DIMENSIONS = -2;
 
@@ -95,7 +97,7 @@ public class GraffitiMod {
     public static final Map<UUID, List<SavedDesign>> GALLERY = new HashMap<>();
     private record ClipboardEntry(ResourceLocation blockId, Map<Direction, int[][]> faces) {}
     public static final Map<java.util.UUID, Deque<ClipboardEntry>> PLAYER_CLIPBOARD = new HashMap<>();
-    private static final long DESATURATION_INTERVAL = 120_000L; // 5 in-game days
+    private static final long DESATURATION_INTERVAL = 120_000L;
     private long lastDesatTick = 0;
     public static final Map<UUID, Integer> SUBMERGED_BRUSHES = new HashMap<>();
 
@@ -568,7 +570,8 @@ public class GraffitiMod {
         String dim = dimKey(player.level());
         ItemStack held = player.getMainHandItem();
         if (!held.is(GRAFFITI_TOOL.get())) {
-            player.sendSystemMessage(Component.literal("Must hold a graffiti can to save."));
+            player.sendSystemMessage(Component.literal(PREFIX)
+                .append(Component.literal("Must hold a graffiti can to save.").withStyle(ChatFormatting.GRAY)));
             return;
         }
 
@@ -579,7 +582,8 @@ public class GraffitiMod {
 
         var dimCache = SERVER_CACHE.get(dim);
         if (dimCache == null) {
-            player.sendSystemMessage(Component.literal("§7Nothing to save here."));
+            player.sendSystemMessage(Component.literal(PREFIX)
+                .append(Component.literal("Nothing to save here.").withStyle(ChatFormatting.GRAY)));
             return;
         }
 
@@ -615,13 +619,19 @@ public class GraffitiMod {
         }
 
         if (blocks.isEmpty()) {
-            player.sendSystemMessage(Component.literal("§7Nothing to save here."));
+            player.sendSystemMessage(Component.literal(PREFIX)
+                .append(Component.literal("Nothing to save here.").withStyle(ChatFormatting.GRAY)));
             return;
         }
 
         int remaining = held.getMaxDamage() - held.getDamageValue();
         if (pixelCount > remaining) {
-            player.sendSystemMessage(Component.literal("§7Not enough paint! Need §c" + pixelCount + " §7durability, have §c" + remaining + "§7."));
+            player.sendSystemMessage(Component.literal(PREFIX)
+                .append(Component.literal("Not enough paint! Need ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(String.valueOf(pixelCount)).withStyle(ChatFormatting.RED))
+                .append(Component.literal(" durability, have ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(String.valueOf(remaining)).withStyle(ChatFormatting.RED))
+                .append(Component.literal(".").withStyle(ChatFormatting.GRAY)));
             return;
         }
 
@@ -639,7 +649,10 @@ public class GraffitiMod {
 
         GALLERY.computeIfAbsent(player.getUUID(), k -> new ArrayList<>()).add(design);
 
-        player.sendSystemMessage(Component.literal("§7Saved §a" + payload.name() + " §7(" + pixelCount + " pixels)"));
+        player.sendSystemMessage(Component.literal(PREFIX)
+            .append(Component.literal("Saved ").withStyle(ChatFormatting.GRAY))
+            .append(Component.literal(payload.name()).withStyle(ChatFormatting.GREEN))
+            .append(Component.literal(" (" + pixelCount + " pixels)").withStyle(ChatFormatting.GRAY)));
         syncGalleryToPlayer(player);
         server.execute(() -> saveGallery(server));
     }
@@ -650,7 +663,8 @@ public class GraffitiMod {
 
         List<SavedDesign> playerDesigns = GALLERY.get(player.getUUID());
         if (playerDesigns == null) {
-            player.sendSystemMessage(Component.literal("§7No designs found."));
+            player.sendSystemMessage(Component.literal(PREFIX)
+                .append(Component.literal("No designs found.").withStyle(ChatFormatting.GRAY)));
             return;
         }
 
@@ -662,20 +676,27 @@ public class GraffitiMod {
             }
         }
         if (design == null) {
-            player.sendSystemMessage(Component.literal("§7Design not found."));
+            player.sendSystemMessage(Component.literal(PREFIX)
+                .append(Component.literal("Design not found.").withStyle(ChatFormatting.GRAY)));
             return;
         }
 
         ItemStack held = player.getMainHandItem();
         if (!held.is(GRAFFITI_TOOL.get())) {
-            player.sendSystemMessage(Component.literal("§7Must hold a graffiti can to paste."));
+            player.sendSystemMessage(Component.literal(PREFIX)
+                .append(Component.literal("Must hold a graffiti can to paste.").withStyle(ChatFormatting.GRAY)));
             return;
         }
 
         int pixelCount = design.pixelCount();
         int remaining = held.getMaxDamage() - held.getDamageValue();
         if (pixelCount > remaining) {
-            player.sendSystemMessage(Component.literal("§7Not enough paint! Need §c" + pixelCount + " §7durability, have §c" + remaining + "§7."));
+            player.sendSystemMessage(Component.literal(PREFIX)
+                .append(Component.literal("Not enough paint! Need ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(String.valueOf(pixelCount)).withStyle(ChatFormatting.RED))
+                .append(Component.literal(" durability, have ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(String.valueOf(remaining)).withStyle(ChatFormatting.RED))
+                .append(Component.literal(".").withStyle(ChatFormatting.GRAY)));
             return;
         }
 
@@ -688,7 +709,6 @@ public class GraffitiMod {
 
         BlockPos target = payload.targetPos();
 
-        // Rotate based on facing difference
         int rotations = getRotations(design.facing(), player.getDirection());
 
         int pasted = 0;
@@ -707,7 +727,9 @@ public class GraffitiMod {
                     Direction side = faceEntry.getKey();
                     Direction rotatedSide = mapHorizontalFace(side, rotations);
                     int[][] grid = faceEntry.getValue();
-                    if (side.getAxis() != rotatedSide.getAxis() && side != Direction.UP && side != Direction.DOWN)
+                    boolean axisChanged = side.getAxis() != rotatedSide.getAxis();
+                    boolean oppositeFaces = rotations % 4 == 2;
+                    if ((axisChanged || oppositeFaces) && side != Direction.UP && side != Direction.DOWN)
                         grid = flipHorizontal(grid);
                     targetFaces.put(rotatedSide, grid);
                     broadcastFace(worldPos, rotatedSide, grid, level);
@@ -716,7 +738,10 @@ public class GraffitiMod {
             }
         }
 
-        player.sendSystemMessage(Component.literal("§7Pasted §a" + design.name() + " §7(" + pasted + " faces)"));
+        player.sendSystemMessage(Component.literal(PREFIX)
+            .append(Component.literal("Pasted ").withStyle(ChatFormatting.GRAY))
+            .append(Component.literal(design.name()).withStyle(ChatFormatting.GREEN))
+            .append(Component.literal(" (" + pasted + " faces)").withStyle(ChatFormatting.GRAY)));
     }
 
     public static BlockPos rotatePos(BlockPos pos, int rotations) {
@@ -734,7 +759,8 @@ public class GraffitiMod {
         if (playerDesigns == null) return;
         playerDesigns.removeIf(d -> d.id().equals(designId));
         if (playerDesigns.isEmpty()) GALLERY.remove(player.getUUID());
-        player.sendSystemMessage(Component.literal("§7Design deleted."));
+        player.sendSystemMessage(Component.literal(PREFIX)
+            .append(Component.literal("Design deleted.").withStyle(ChatFormatting.GRAY)));
         syncGalleryToPlayer(player);
         var server = player.getServer();
         if (server != null) server.execute(() -> saveGallery(server));
@@ -980,7 +1006,9 @@ public class GraffitiMod {
             Direction oldFace = clipEntry.getKey();
             Direction newFace = mapHorizontalFace(oldFace, rotations);
             int[][] grid = clipEntry.getValue();
-            if (oldFace.getAxis() != newFace.getAxis() && oldFace != Direction.UP && oldFace != Direction.DOWN)
+            boolean axisChanged = oldFace.getAxis() != newFace.getAxis();
+            boolean oppositeFaces = rotations % 4 == 2;
+            if ((axisChanged || oppositeFaces) && oldFace != Direction.UP && oldFace != Direction.DOWN)
                 grid = flipHorizontal(grid);
             targetFaces.put(newFace, grid);
 

@@ -121,7 +121,6 @@ public class ClientHandler {
             lastHeldItem = held.copy();
         }
 
-        // Preview mode handling
         if (GalleryScreen.previewActive) {
             if (GLFW.glfwGetKey(client.getWindow().getWindow(), GLFW.GLFW_KEY_ESCAPE) == GLFW.GLFW_PRESS) {
                 GalleryScreen.previewActive = false;
@@ -143,7 +142,7 @@ public class ClientHandler {
             client.player.displayClientMessage(
                     Component.literal("§7Preview — §ePgUp/PgDn §7move Y, §eRight-click §7to paste, §eESC §7to cancel"),
                     true);
-            return; // block all other tick processing while previewing
+            return;
         }
 
         boolean hasItem = held.is(GraffitiMod.GRAFFITI_TOOL.get());
@@ -266,7 +265,6 @@ public class ClientHandler {
 
         boolean rightDown = GLFW.glfwGetMouseButton(client.getWindow().getWindow(), GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
 
-        // Select mode: right-click sets selection corners
         if (isGraffitiTool && !GalleryScreen.previewActive && GraffitiItem.getToolMode(held) == GraffitiItem.TOOL_SELECT
                 && rightDown && !lastRightDown && client.hitResult instanceof BlockHitResult selHit) {
             BlockPos hitPos = selHit.getBlockPos();
@@ -282,13 +280,11 @@ public class ClientHandler {
             return;
         }
 
-        // Select mode: skip all paint handling on held right-click
         if (isGraffitiTool && GraffitiItem.getToolMode(held) == GraffitiItem.TOOL_SELECT) {
             lastRightDown = rightDown;
             return;
         }
 
-        // Preview mode paste on right-click
         if (GalleryScreen.previewActive && rightDown && !lastRightDown && client.hitResult instanceof BlockHitResult previewHit) {
             BlockPos adjustedPos = previewHit.getBlockPos().offset(0, GalleryScreen.previewYOffset, 0);
             PacketDistributor.sendToServer(new GalleryPastePayload(

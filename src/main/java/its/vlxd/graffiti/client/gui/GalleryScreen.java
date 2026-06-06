@@ -22,16 +22,13 @@ public class GalleryScreen extends Screen {
     private static final int W = 320, H = 230;
     private static final int THUMB_SIZE = 48;
 
-    // Selection state
     public static BlockPos selPos1;
     public static BlockPos selPos2;
 
-    // Static state for preview mode
     public static SavedDesign previewDesign;
     public static boolean previewActive;
     public static int previewYOffset;
 
-    // Cache of designs from server
     public static List<SavedDesign> cachedDesigns = List.of();
 
     private int px, py;
@@ -114,7 +111,6 @@ public class GalleryScreen extends Screen {
             ctx.drawString(font, Component.literal(name), tx + THUMB_SIZE / 2 - font.width(name) / 2, ty + THUMB_SIZE + 2, 0xAAAAAA);
         }
 
-        // Pagination
         if (maxPage > 0) {
             String pageStr = (page + 1) + "/" + (maxPage + 1);
             int pgX = px + W / 2 - font.width(pageStr) / 2;
@@ -123,18 +119,14 @@ public class GalleryScreen extends Screen {
             if (page < maxPage) ctx.drawString(font, Component.literal(">"), px + W - 20, py + H - 72, 0xCCCCCC);
         }
 
-        // Separator
         ctx.fill(px + 4, py + H - 46, px + W - 4, py + H - 45, 0xFF444444);
 
-        // Selection info + save controls
+
         ctx.drawString(font, Component.literal("Name:"), px + 12, py + H - 64, 0x888888);
         if (selPos1 != null && selPos2 != null) {
             String selStr = "Selection: " + selPos1.toShortString() + " \u2192 " + selPos2.toShortString();
             ctx.drawString(font, Component.literal(selStr).withStyle(net.minecraft.ChatFormatting.GREEN), px + 165, py + H - 64, 0x55FF55);
             ctx.drawString(font, Component.literal("\u2713 Ready to save"), px + 165, py + H - 44, 0x55FF55);
-        } else {
-            ctx.drawString(font, Component.literal("Switch to Select mode"), px + 165, py + H - 64, 0xFF5555);
-            ctx.drawString(font, Component.literal("& right-click 2 blocks"), px + 165, py + H - 44, 0xFF5555);
         }
 
         super.render(ctx, mx, my, dt);

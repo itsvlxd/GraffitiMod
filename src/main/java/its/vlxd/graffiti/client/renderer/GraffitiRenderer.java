@@ -177,7 +177,6 @@ public class GraffitiRenderer {
             }
         }
 
-        // Selection box (always visible when both positions are set)
         var mc = Minecraft.getInstance();
         if (GalleryScreen.selPos1 != null && GalleryScreen.selPos2 != null) {
             var lineBuffer = bufferSource.getBuffer(RenderType.lines());
@@ -186,7 +185,6 @@ public class GraffitiRenderer {
             renderSelectionBox(poseStack.last().pose(), lineBuffer, min, max);
         }
 
-        // Preview ghost (semi-transparent design overlay, rotated to match player facing)
         if (GalleryScreen.previewActive && GalleryScreen.previewDesign != null
                 && mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult previewHit) {
             BlockPos base = previewHit.getBlockPos().offset(0, GalleryScreen.previewYOffset, 0);
@@ -208,12 +206,13 @@ public class GraffitiRenderer {
                     Direction side = faceEntry.getKey();
                     Direction rotatedSide = GraffitiMod.mapHorizontalFace(side, rotations);
                     int[][] grid = faceEntry.getValue();
-                    if (side.getAxis() != rotatedSide.getAxis() && side != Direction.UP && side != Direction.DOWN)
+                    boolean axisChanged = side.getAxis() != rotatedSide.getAxis();
+                    boolean oppositeFaces = rotations % 4 == 2;
+                    if ((axisChanged || oppositeFaces) && side != Direction.UP && side != Direction.DOWN)
                         grid = GraffitiMod.flipHorizontal(grid);
                     int light = LevelRenderer.getLightColor(world, worldPos.relative(rotatedSide));
                     float depth = rotatedSide.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1.0f : 0.0f;
 
-                    // Render with halved alpha for preview
                     for (int u = 0; u < 16; u++) {
                         for (int v = 0; v < 16; v++) {
                             int color = grid[u][v];
@@ -242,17 +241,14 @@ public class GraffitiRenderer {
 
         int r = 255, g = 50, b = 50, a = 200;
 
-        // Bottom face
         line(pose, buf, x1, y1, z1, x2, y1, z1, r, g, b, a);
         line(pose, buf, x2, y1, z1, x2, y1, z2, r, g, b, a);
         line(pose, buf, x2, y1, z2, x1, y1, z2, r, g, b, a);
         line(pose, buf, x1, y1, z2, x1, y1, z1, r, g, b, a);
-        // Top face
         line(pose, buf, x1, y2, z1, x2, y2, z1, r, g, b, a);
         line(pose, buf, x2, y2, z1, x2, y2, z2, r, g, b, a);
         line(pose, buf, x2, y2, z2, x1, y2, z2, r, g, b, a);
         line(pose, buf, x1, y2, z2, x1, y2, z1, r, g, b, a);
-        // Vertical edges
         line(pose, buf, x1, y1, z1, x1, y2, z1, r, g, b, a);
         line(pose, buf, x2, y1, z1, x2, y2, z1, r, g, b, a);
         line(pose, buf, x2, y1, z2, x2, y2, z2, r, g, b, a);

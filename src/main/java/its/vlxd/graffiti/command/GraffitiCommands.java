@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.UUID;
 
 public class GraffitiCommands {
-    private static final String PREFIX = "§6§lGraffitiMod §8§l┃ §7";
     private static final Map<UUID, Long> PENDING_CONFIRMS = new HashMap<>();
     private static final long CONFIRM_TIMEOUT = 30_000;
     private static boolean debugEnabled = false;
@@ -49,7 +48,7 @@ public class GraffitiCommands {
         var source = ctx.getSource();
         var player = source.getPlayer();
 
-        source.sendSuccess(() -> Component.literal(PREFIX)
+        source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                 .append(Component.literal("A creative mod that allows players to paint on any block surface with customizable colors and tools.")
                         .withStyle(ChatFormatting.GRAY)), false);
 
@@ -57,13 +56,13 @@ public class GraffitiCommands {
                 .map(c -> c.getModInfo().getVersion().toString())
                 .orElse("unknown");
 
-        source.sendSuccess(() -> Component.literal(PREFIX)
+        source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                 .append(Component.literal("Version: ")
                         .withStyle(ChatFormatting.GRAY))
                 .append(Component.literal(version)
                         .withStyle(ChatFormatting.WHITE)), false);
 
-        source.sendSuccess(() -> Component.literal(PREFIX)
+        source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                 .append(Component.literal("Author: ")
                         .withStyle(ChatFormatting.GRAY))
                 .append(Component.literal("@itsvlxd")
@@ -88,7 +87,7 @@ public class GraffitiCommands {
             PacketDistributor.sendToPlayer((ServerPlayer) player, new DebugPayload(debugEnabled));
         }
 
-        source.sendSuccess(() -> Component.literal(PREFIX)
+        source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                 .append(Component.literal("Debug visualization ")
                         .withStyle(ChatFormatting.GRAY))
                 .append(Component.literal(debugEnabled ? "ENABLED" : "DISABLED")
@@ -103,22 +102,22 @@ public class GraffitiCommands {
         if (player == null) return 0;
 
         if (GraffitiMod.SERVER_CACHE.isEmpty()) {
-            source.sendSuccess(() -> Component.literal(PREFIX)
+            source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                     .append(Component.literal("There is no graffiti to clean.").withStyle(ChatFormatting.GRAY)), false);
             return 1;
         }
 
         PENDING_CONFIRMS.put(player.getUUID(), System.currentTimeMillis());
 
-        source.sendSuccess(() -> Component.literal(PREFIX)
+        source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                 .append(Component.literal("This will ").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal("DELETE").withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
                 .append(Component.literal(" all graffiti on the entire server!").withStyle(ChatFormatting.GRAY)), false);
-        source.sendSuccess(() -> Component.literal(PREFIX)
+        source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                 .append(Component.literal("This action ").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal("CANNOT").withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
                 .append(Component.literal(" be undone!").withStyle(ChatFormatting.GRAY)), false);
-        source.sendSuccess(() -> Component.literal(PREFIX)
+        source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                 .append(Component.literal("Type ").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal("/graffiti confirm").withStyle(ChatFormatting.GOLD))
                 .append(Component.literal(" within 30 seconds to proceed.").withStyle(ChatFormatting.GRAY)), false);
@@ -134,7 +133,7 @@ public class GraffitiCommands {
         var uuid = player.getUUID();
         Long time = PENDING_CONFIRMS.get(uuid);
         if (time == null || System.currentTimeMillis() - time > CONFIRM_TIMEOUT) {
-            source.sendSuccess(() -> Component.literal(PREFIX)
+            source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                     .append(Component.literal("No pending clean action. Use ").withStyle(ChatFormatting.GRAY))
                     .append(Component.literal("/graffiti clean").withStyle(ChatFormatting.GOLD))
                     .append(Component.literal(" first.").withStyle(ChatFormatting.GRAY)), false);
@@ -173,7 +172,7 @@ public class GraffitiCommands {
             PacketDistributor.sendToPlayer(p, emptySync);
         }
 
-        source.sendSuccess(() -> Component.literal(PREFIX)
+        source.sendSuccess(() -> Component.literal(GraffitiMod.PREFIX)
                 .append(Component.literal("All graffiti has been ").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal("CLEANED").withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD))
                 .append(Component.literal(" from the server!").withStyle(ChatFormatting.GRAY)), true);
