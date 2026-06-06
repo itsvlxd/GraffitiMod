@@ -105,14 +105,28 @@ jobs:
           cat > release_body.md << 'RELEASE_EOF'
           ## Graffiti Mod v${{ needs.build.outputs.new_release_version }}
 
-          A NeoForge mod for Minecraft 1.21.1 that lets players paint pixels on any block surface with full color customization.
+          A NeoForge mod for Minecraft 1.21.1 that lets players paint pixels on any block surface with full color customization, clean graffiti with brushes, and watch it age over time.
 
           ### Features
-          - Spray Can — right-click to paint (smooth, no cooldown)
-          - Full color picker (press C while holding spray can)
-          - 4 tools: Pencil, Eraser, Fill, Color Picker (switch with Ctrl + scroll or arrows)
-          - Multiplayer support with persistent graffiti
-          - Depth-aware rendering on complex block shapes
+          - Spray Can with 12800 durability — right-click to paint (smooth, no cooldown)
+          - Full color editor (press C): HSB palette, hue/alpha sliders, HEX input, brush size, brush shape
+          - 5 brush shapes: Square, Circle, Rounded, Cloud, Leaky
+          - Brush overflow — painting near edges continues onto adjacent blocks
+          - Color lock in survival — color can only be set once per can
+          - Refill with Red/Blue/Green Dye — preserves settings
+          - 4 tools: Pencil, Fill, Picker, Select (cycle via C menu)
+          - Select mode: right-click two blocks to mark a region, then save to gallery
+          - Gallery (press G): save/paste named designs with auto-rotation and durability cost
+          - Preview mode: scroll or PgUp/PgDn to adjust Y offset, right-click to confirm paste
+          - Brush (cleaning) and Wet Brush — circular 6×6 area
+          - Graffiti aging — desaturates every 5 in-game days (random 2–15%, capped at 85%)
+          - Clipboard matches block type, not FIFO order
+          - Looping spatial paint sound, equip sound, brush sound — all 3D
+          - Multiplayer sync + disk persistence
+          - Configurable spray reach (default 8, cap 20)
+          - Depth-aware rendering on complex block shapes, greedy meshing, frustum culling
+          - All settings per-can via NBT (color, size, shape, lock) — survives drops
+          - JEI integration, EN + RO translations
 
           ### Installation
           1. Install NeoForge 21.1.1+ for Minecraft 1.21.1
